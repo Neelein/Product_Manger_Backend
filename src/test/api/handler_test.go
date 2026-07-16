@@ -1,24 +1,81 @@
+//go:build integration
+
 package api_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
+	"time"
 
 	"backend/src/api"
 	"backend/src/database"
 	"backend/src/domain"
 
 	"github.com/gorilla/mux"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func setupTestHandler() (*database.InMemoryRepository, *api.ProductHandler) {
-	repo := database.NewInMemoryRepository()
+var testPool *pgxpool.Pool
+
+func TestMain(m *testing.M) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		databaseURL = "postgres://root:root123@localhost:5432/productdb_test?sslmode=disable"
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		panic("failed to connect to test database: " + err.Error())
+	}
+
+	dropTables(ctx, pool)
+	runMigration(ctx, pool)
+
+	testPool = pool
+
+	code := m.Run()
+
+	pool.Close()
+	os.Exit(code)
+}
+
+func dropTables(ctx context.Context, pool *pgxpool.Pool) {
+	for _, table := range []string{"product_prices", "product_details", "products"} {
+		_, _ = pool.Exec(ctx, "DROP TABLE IF EXISTS "+table+" CASCADE")
+	}
+}
+
+func runMigration(ctx context.Context, pool *pgxpool.Pool) {
+	schema, err := os.ReadFile("../../../db/migrations/001_create_products.sql")
+	if err != nil {
+		panic("failed to read migration file: " + err.Error())
+	}
+	_, err = pool.Exec(ctx, string(schema))
+	if err != nil {
+		panic("failed to run migration: " + err.Error())
+	}
+}
+
+func setupTestHandler() (*database.ProductRepositoryPGX, *api.ProductHandler) {
+	repo := database.NewProductRepositoryPGX(testPool)
 	handler := api.NewProductHandler(repo)
 	return repo, handler
+}
+
+func cleanupProducts(t *testing.T) {
+	t.Helper()
+	_, err := testPool.Exec(context.Background(), "TRUNCATE TABLE products CASCADE")
+	require.NoError(t, err)
 }
 
 func executeRequest(
@@ -48,6 +105,7 @@ func executeRequestWithVars(
 }
 
 func TestHandler_CreateProduct(t *testing.T) {
+	defer cleanupProducts(t)
 	_, handler := setupTestHandler()
 
 	tests := []struct {
@@ -104,10 +162,11 @@ func TestHandler_CreateProduct(t *testing.T) {
 }
 
 func TestHandler_ListProducts(t *testing.T) {
+	defer cleanupProducts(t)
 	repo, handler := setupTestHandler()
 
 	repo.Create(
-		nil,
+		context.Background(),
 		&domain.Product{
 			Name:        "Product A",
 			Description: "Desc A",
@@ -115,7 +174,7 @@ func TestHandler_ListProducts(t *testing.T) {
 		},
 	)
 	repo.Create(
-		nil,
+		context.Background(),
 		&domain.Product{
 			Name:        "Product B",
 			Description: "Desc B",
@@ -139,6 +198,7 @@ func TestHandler_ListProducts(t *testing.T) {
 }
 
 func TestHandler_ListProducts_Empty(t *testing.T) {
+	defer cleanupProducts(t)
 	_, handler := setupTestHandler()
 
 	w := executeRequest(
@@ -157,6 +217,7 @@ func TestHandler_ListProducts_Empty(t *testing.T) {
 }
 
 func TestHandler_GetProduct(t *testing.T) {
+	defer cleanupProducts(t)
 	repo, handler := setupTestHandler()
 
 	created := domain.Product{
@@ -164,7 +225,7 @@ func TestHandler_GetProduct(t *testing.T) {
 		Description: "Desc",
 		Price:       15.0,
 	}
-	repo.Create(nil, &created)
+	repo.Create(context.Background(), &created)
 
 	tests := []struct {
 		name       string
@@ -207,6 +268,7 @@ func TestHandler_GetProduct(t *testing.T) {
 }
 
 func TestHandler_UpdateProduct(t *testing.T) {
+	defer cleanupProducts(t)
 	repo, handler := setupTestHandler()
 
 	created := domain.Product{
@@ -214,7 +276,7 @@ func TestHandler_UpdateProduct(t *testing.T) {
 		Description: "Original desc",
 		Price:       10.0,
 	}
-	repo.Create(nil, &created)
+	repo.Create(context.Background(), &created)
 
 	tests := []struct {
 		name       string
@@ -283,6 +345,7 @@ func TestHandler_UpdateProduct(t *testing.T) {
 }
 
 func TestHandler_DeleteProduct(t *testing.T) {
+	defer cleanupProducts(t)
 	repo, handler := setupTestHandler()
 
 	created := domain.Product{
@@ -290,7 +353,7 @@ func TestHandler_DeleteProduct(t *testing.T) {
 		Description: "Desc",
 		Price:       5.0,
 	}
-	repo.Create(nil, &created)
+	repo.Create(context.Background(), &created)
 
 	tests := []struct {
 		name       string
