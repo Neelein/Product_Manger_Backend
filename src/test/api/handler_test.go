@@ -50,19 +50,24 @@ func TestMain(m *testing.M) {
 }
 
 func dropTables(ctx context.Context, pool *pgxpool.Pool) {
-	for _, table := range []string{"product_prices", "product_details", "products"} {
+	for _, table := range []string{"sessions", "members", "product_prices", "product_details", "products"} {
 		_, _ = pool.Exec(ctx, "DROP TABLE IF EXISTS "+table+" CASCADE")
 	}
 }
 
 func runMigration(ctx context.Context, pool *pgxpool.Pool) {
-	schema, err := os.ReadFile("../../../db/migrations/001_create_products.sql")
-	if err != nil {
-		panic("failed to read migration file: " + err.Error())
-	}
-	_, err = pool.Exec(ctx, string(schema))
-	if err != nil {
-		panic("failed to run migration: " + err.Error())
+	for _, file := range []string{
+		"../../../db/migrations/001_create_products.sql",
+		"../../../db/migrations/002_create_members.sql",
+	} {
+		schema, err := os.ReadFile(file)
+		if err != nil {
+			panic("failed to read migration file: " + err.Error())
+		}
+		_, err = pool.Exec(ctx, string(schema))
+		if err != nil {
+			panic("failed to run migration: " + err.Error())
+		}
 	}
 }
 

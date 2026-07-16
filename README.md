@@ -1,6 +1,6 @@
 # Product Manager API
 
-RESTful product management API built with Go, gorilla/mux, and PostgreSQL.
+RESTful product and member management API built with Go, gorilla/mux, and PostgreSQL.
 
 ## Getting Started
 
@@ -15,8 +15,8 @@ RESTful product management API built with Go, gorilla/mux, and PostgreSQL.
 # Start PostgreSQL
 docker compose up -d
 
-# Run migrations
-docker exec -i pm_postgres psql -U root -d productdb < db/migrations/001_create_products.sql
+# Run all migrations
+make migrate
 
 # Start server
 go run main.go
@@ -27,10 +27,16 @@ Server starts on `:8080`.
 ### Test
 
 ```bash
-go test ./...
+# Unit tests
+go test ./src/test/domain/...
+
+# Integration tests (requires test database running)
+go test -tags=integration ./src/test/...
 ```
 
 ## API
+
+### Products
 
 | Method | Path | Handler |
 |--------|------|---------|
@@ -40,7 +46,21 @@ go test ./...
 | `POST` | `/api/products/{id}/update` | UpdateProduct |
 | `POST` | `/api/products/{id}/delete` | DeleteProduct |
 
+### Members
+
+| Method | Path | Handler |
+|--------|------|---------|
+| `POST` | `/api/members/register` | RegisterMember |
+| `POST` | `/api/members/login` | LoginMember |
+| `POST` | `/api/members/logout` | LogoutMember |
+| `GET` | `/api/members/me` | GetCurrentMember |
+| `POST` | `/api/members/update` | UpdateMember |
+
+Authentication is handled via HttpOnly `session_key` cookies (valid for 1 day).
+
 ## Schema
+
+### Products
 
 Three-tier product model:
 
@@ -52,15 +72,23 @@ products 1──N product_details 1──N product_prices
 - **product_details** — info sections (return_policy, usage_instructions, specifications, shipping_info)
 - **product_prices** — price variants with multi-currency support (default TWD)
 
+### Members
+
+```
+members 1──N sessions
+```
+
+- **members** — id, email (unique), password (bcrypt), name, timestamps
+- **sessions** — id, member_id (FK), session_key, expires_at (1 day)
+
 ## Project Layout
 
 ```
 src/
 ├── api/          # HTTP handlers + router
-├── domain/       # Product struct + repository interface
-├── database/     # In-memory repo (pgx placeholder)
-└── test/         # Tests
+├── domain/       # Structs + repository interfaces + errors
+├── database/     # PostgreSQL repository implementations (pgx)
+└── test/         # Unit and integration tests
 db/
 └── migrations/   # SQL migrations
 ```
-# Product_Manger_Backend
