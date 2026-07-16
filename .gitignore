@@ -17,5 +17,8 @@ server
 dotenv.env
 .env
 
+# opencode config
+opencode.json
+
 # Dependencies
 go.sum
