@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
 
 	"backend/src/api"
 	"backend/src/database"
@@ -16,7 +18,12 @@ type Response struct {
 }
 
 func main() {
-	repo := database.NewInMemoryRepository()
+	pool, err := database.NewPool(context.Background(), os.Getenv("DATABASE_URL"))
+	if err != nil {
+		log.Fatalf("failed to connect to database: %v", err)
+	}
+	defer pool.Close()
+	repo := database.NewProductRepositoryPGX(pool)
 
 	r := mux.NewRouter()
 
