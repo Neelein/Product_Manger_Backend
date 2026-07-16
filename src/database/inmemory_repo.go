@@ -2,7 +2,6 @@ package database
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -60,7 +59,7 @@ func (r *InMemoryRepository) GetByID(
 
 	p, ok := r.products[id]
 	if !ok {
-		return nil, fmt.Errorf("product not found: %s", id)
+		return nil, domain.ErrProductNotFound
 	}
 	return &p, nil
 }
@@ -74,7 +73,7 @@ func (r *InMemoryRepository) Update(
 
 	existing, ok := r.products[product.ID]
 	if !ok {
-		return fmt.Errorf("product not found: %s", product.ID)
+		return domain.ErrProductNotFound
 	}
 
 	product.CreatedAt = existing.CreatedAt
@@ -91,7 +90,7 @@ func (r *InMemoryRepository) Delete(
 	defer r.mu.Unlock()
 
 	if _, ok := r.products[id]; !ok {
-		return fmt.Errorf("product not found: %s", id)
+		return domain.ErrProductNotFound
 	}
 
 	delete(r.products, id)
