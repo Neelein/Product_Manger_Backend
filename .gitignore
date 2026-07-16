@@ -1,0 +1,17 @@
+# OS
+.DS_Store
+
+# Agent skills
+.agents/
+
+# Local
+recover/
+
+# Docker
+docker-compose.yml
+
+# Go build
+server
+
+# Dependencies
+go.sum
