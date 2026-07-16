@@ -24,6 +24,8 @@ func main() {
 	}
 	defer pool.Close()
 	repo := database.NewProductRepositoryPGX(pool)
+	memberRepo := database.NewMemberRepositoryPGX(pool)
+	sessionRepo := database.NewSessionRepositoryPGX(pool)
 
 	r := mux.NewRouter()
 
@@ -31,6 +33,7 @@ func main() {
 	r.HandleFunc("/api/health", healthHandler).Methods("GET")
 
 	api.RegisterProductRoutes(r, repo)
+	api.RegisterMemberRoutes(r, memberRepo, sessionRepo)
 
 	log.Println("Server starting on :8080")
 	log.Fatal(http.ListenAndServe(":8080", r))

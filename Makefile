@@ -7,4 +7,4 @@ db-stop:
 	docker compose stop db
 
 db-rm:
-	docker compose down -v
+	docker compose down
