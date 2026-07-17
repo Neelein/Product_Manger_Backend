@@ -75,10 +75,9 @@ func cleanupProducts(t *testing.T) {
 func createTestProduct(t *testing.T, repo *database.ProductRepositoryPGX) domain.Product {
 	t.Helper()
 	p := domain.Product{
-		Name:        "Test Product",
-		Description: "Test description",
-		Price:       29.99,
-		Category:    "electronics",
+		Name:     "Test Product",
+		Price:    29.99,
+		Category: "electronics",
 	}
 	err := repo.Create(context.Background(), &p)
 	require.NoError(t, err)
@@ -90,10 +89,9 @@ func TestProductRepositoryPGX_Create(t *testing.T) {
 	repo := database.NewProductRepositoryPGX(testPool)
 
 	product := domain.Product{
-		Name:        "New Product",
-		Description: "Brand new",
-		Price:       99.99,
-		Category:    "general",
+		Name:     "New Product",
+		Price:    99.99,
+		Category: "general",
 	}
 
 	err := repo.Create(context.Background(), &product)
@@ -176,7 +174,6 @@ func TestProductRepositoryPGX_Update(t *testing.T) {
 		originalUpdatedAt := created.UpdatedAt
 
 		created.Name = "Updated Name"
-		created.Description = "Updated description"
 		created.Category = "updated-category"
 
 		err := repo.Update(context.Background(), &created)
@@ -185,7 +182,6 @@ func TestProductRepositoryPGX_Update(t *testing.T) {
 		updated, err := repo.GetByID(context.Background(), created.ID)
 		assert.NoError(t, err)
 		assert.Equal(t, "Updated Name", updated.Name)
-		assert.Equal(t, "Updated description", updated.Description)
 		assert.Equal(t, "updated-category", updated.Category)
 		assert.True(t, updated.UpdatedAt.After(originalUpdatedAt))
 	})
@@ -197,6 +193,252 @@ func TestProductRepositoryPGX_Update(t *testing.T) {
 		}
 		err := repo.Update(context.Background(), &p)
 		assert.ErrorIs(t, err, domain.ErrProductNotFound)
+	})
+}
+
+func cleanupDetails(t *testing.T) {
+	t.Helper()
+	_, err := testPool.Exec(context.Background(), "TRUNCATE TABLE product_details CASCADE")
+	require.NoError(t, err)
+}
+
+func TestProductRepositoryPGX_CreateDetail(t *testing.T) {
+	defer cleanupProducts(t)
+	defer cleanupDetails(t)
+	repo := database.NewProductRepositoryPGX(testPool)
+
+	product := createTestProduct(t, repo)
+
+	detail := domain.ProductDetail{
+		ProductID:         product.ID,
+		Introduction:      "這是一個優質商品",
+		UsageInstructions: "使用前請詳閱說明",
+		ReturnPolicy:      "七天鑑賞期",
+	}
+
+	err := repo.CreateDetail(context.Background(), &detail)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, detail.ID)
+	assert.Equal(t, product.ID, detail.ProductID)
+	assert.Equal(t, "這是一個優質商品", detail.Introduction)
+	assert.False(t, detail.CreatedAt.IsZero())
+	assert.False(t, detail.UpdatedAt.IsZero())
+}
+
+func TestProductRepositoryPGX_CreatePrice(t *testing.T) {
+	defer cleanupProducts(t)
+	defer cleanupDetails(t)
+	repo := database.NewProductRepositoryPGX(testPool)
+
+	product := createTestProduct(t, repo)
+
+	detail := domain.ProductDetail{
+		ProductID: product.ID,
+	}
+	err := repo.CreateDetail(context.Background(), &detail)
+	require.NoError(t, err)
+
+	price := domain.ProductPrice{
+		ProductDetailID: detail.ID,
+		Label:           "成人票",
+		Amount:          100.00,
+		Currency:        "TWD",
+		SortOrder:       1,
+	}
+
+	err = repo.CreatePrice(context.Background(), &price)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, price.ID)
+	assert.Equal(t, detail.ID, price.ProductDetailID)
+	assert.Equal(t, 100.00, price.Amount)
+	assert.False(t, price.CreatedAt.IsZero())
+	assert.False(t, price.UpdatedAt.IsZero())
+}
+
+func TestProductRepositoryPGX_GetDetailByProductID(t *testing.T) {
+	defer cleanupProducts(t)
+	defer cleanupDetails(t)
+	repo := database.NewProductRepositoryPGX(testPool)
+
+	product := createTestProduct(t, repo)
+
+	t.Run("existing detail", func(t *testing.T) {
+		created := domain.ProductDetail{
+			ProductID:         product.ID,
+			Introduction:      "介紹",
+			UsageInstructions: "說明",
+			ReturnPolicy:      "退貨",
+		}
+		err := repo.CreateDetail(context.Background(), &created)
+		require.NoError(t, err)
+
+		got, err := repo.GetDetailByProductID(context.Background(), product.ID)
+		assert.NoError(t, err)
+		assert.Equal(t, created.ID, got.ID)
+		assert.Equal(t, "介紹", got.Introduction)
+	})
+
+	t.Run("non-existent product", func(t *testing.T) {
+		_, err := repo.GetDetailByProductID(context.Background(), "00000000-0000-0000-0000-000000000000")
+		assert.ErrorIs(t, err, domain.ErrDetailNotFound)
+	})
+}
+
+func TestProductRepositoryPGX_UpdateDetail(t *testing.T) {
+	defer cleanupProducts(t)
+	defer cleanupDetails(t)
+	repo := database.NewProductRepositoryPGX(testPool)
+	product := createTestProduct(t, repo)
+
+	t.Run("update existing detail", func(t *testing.T) {
+		created := domain.ProductDetail{
+			ProductID: product.ID,
+		}
+		err := repo.CreateDetail(context.Background(), &created)
+		require.NoError(t, err)
+		originalUpdatedAt := created.UpdatedAt
+
+		created.Introduction = "新介紹"
+		created.UsageInstructions = "新說明"
+		created.ReturnPolicy = "新退貨"
+
+		err = repo.UpdateDetail(context.Background(), &created)
+		assert.NoError(t, err)
+
+		got, err := repo.GetDetailByProductID(context.Background(), product.ID)
+		assert.NoError(t, err)
+		assert.Equal(t, "新介紹", got.Introduction)
+		assert.Equal(t, "新說明", got.UsageInstructions)
+		assert.Equal(t, "新退貨", got.ReturnPolicy)
+		assert.True(t, got.UpdatedAt.After(originalUpdatedAt))
+	})
+
+	t.Run("non-existent detail", func(t *testing.T) {
+		d := domain.ProductDetail{
+			ID: "00000000-0000-0000-0000-000000000000",
+		}
+		err := repo.UpdateDetail(context.Background(), &d)
+		assert.ErrorIs(t, err, domain.ErrDetailNotFound)
+	})
+}
+
+func TestProductRepositoryPGX_GetPriceByID(t *testing.T) {
+	defer cleanupProducts(t)
+	defer cleanupDetails(t)
+	repo := database.NewProductRepositoryPGX(testPool)
+	product := createTestProduct(t, repo)
+
+	detail := domain.ProductDetail{ProductID: product.ID}
+	err := repo.CreateDetail(context.Background(), &detail)
+	require.NoError(t, err)
+
+	t.Run("existing price", func(t *testing.T) {
+		created := domain.ProductPrice{
+			ProductDetailID: detail.ID,
+			Label:           "成人票",
+			Amount:          100,
+			Currency:        "TWD",
+			SortOrder:       1,
+		}
+		err := repo.CreatePrice(context.Background(), &created)
+		require.NoError(t, err)
+
+		got, err := repo.GetPriceByID(context.Background(), created.ID)
+		assert.NoError(t, err)
+		assert.Equal(t, created.ID, got.ID)
+		assert.Equal(t, "成人票", got.Label)
+		assert.Equal(t, 100.0, got.Amount)
+	})
+
+	t.Run("non-existent price", func(t *testing.T) {
+		_, err := repo.GetPriceByID(context.Background(), "00000000-0000-0000-0000-000000000000")
+		assert.ErrorIs(t, err, domain.ErrPriceNotFound)
+	})
+}
+
+func TestProductRepositoryPGX_GetPricesByDetailID(t *testing.T) {
+	defer cleanupProducts(t)
+	defer cleanupDetails(t)
+	repo := database.NewProductRepositoryPGX(testPool)
+	product := createTestProduct(t, repo)
+
+	detail := domain.ProductDetail{ProductID: product.ID}
+	err := repo.CreateDetail(context.Background(), &detail)
+	require.NoError(t, err)
+
+	t.Run("multiple prices ordered by sort_order", func(t *testing.T) {
+		repo.CreatePrice(context.Background(), &domain.ProductPrice{
+			ProductDetailID: detail.ID, Label: "B", Amount: 2, SortOrder: 2,
+		})
+		repo.CreatePrice(context.Background(), &domain.ProductPrice{
+			ProductDetailID: detail.ID, Label: "A", Amount: 1, SortOrder: 1,
+		})
+
+		prices, err := repo.GetPricesByDetailID(context.Background(), detail.ID)
+		assert.NoError(t, err)
+		assert.Len(t, prices, 2)
+		assert.Equal(t, 1, prices[0].SortOrder)
+		assert.Equal(t, "A", prices[0].Label)
+		assert.Equal(t, 2, prices[1].SortOrder)
+		assert.Equal(t, "B", prices[1].Label)
+	})
+
+	t.Run("no prices", func(t *testing.T) {
+		other := createTestProduct(t, repo)
+		otherDetail := domain.ProductDetail{ProductID: other.ID}
+		repo.CreateDetail(context.Background(), &otherDetail)
+
+		prices, err := repo.GetPricesByDetailID(context.Background(), otherDetail.ID)
+		assert.NoError(t, err)
+		assert.Empty(t, prices)
+	})
+}
+
+func TestProductRepositoryPGX_UpdatePrice(t *testing.T) {
+	defer cleanupProducts(t)
+	defer cleanupDetails(t)
+	repo := database.NewProductRepositoryPGX(testPool)
+	product := createTestProduct(t, repo)
+
+	detail := domain.ProductDetail{ProductID: product.ID}
+	err := repo.CreateDetail(context.Background(), &detail)
+	require.NoError(t, err)
+
+	t.Run("update existing price", func(t *testing.T) {
+		created := domain.ProductPrice{
+			ProductDetailID: detail.ID,
+			Label:           "原價",
+			Amount:          100,
+			Currency:        "TWD",
+			SortOrder:       1,
+		}
+		err := repo.CreatePrice(context.Background(), &created)
+		require.NoError(t, err)
+		originalUpdatedAt := created.UpdatedAt
+
+		created.Label = "特價"
+		created.Amount = 80
+		created.Currency = "USD"
+		created.SortOrder = 2
+
+		err = repo.UpdatePrice(context.Background(), &created)
+		assert.NoError(t, err)
+
+		got, err := repo.GetPriceByID(context.Background(), created.ID)
+		assert.NoError(t, err)
+		assert.Equal(t, "特價", got.Label)
+		assert.Equal(t, 80.0, got.Amount)
+		assert.Equal(t, "USD", got.Currency)
+		assert.Equal(t, 2, got.SortOrder)
+		assert.True(t, got.UpdatedAt.After(originalUpdatedAt))
+	})
+
+	t.Run("non-existent price", func(t *testing.T) {
+		p := domain.ProductPrice{
+			ID: "00000000-0000-0000-0000-000000000000",
+		}
+		err := repo.UpdatePrice(context.Background(), &p)
+		assert.ErrorIs(t, err, domain.ErrPriceNotFound)
 	})
 }
 

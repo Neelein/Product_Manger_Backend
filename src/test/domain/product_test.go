@@ -10,40 +10,35 @@ import (
 
 func TestProductStruct(t *testing.T) {
 	product := domain.Product{
-		ID:          "123",
-		Name:        "Test Product",
-		Description: "A test product",
-		Price:       19.99,
-		Category:    "electronics",
+		ID:       "123",
+		Name:     "Test Product",
+		Price:    19.99,
+		Category: "electronics",
 	}
 
 	assert.Equal(t, "123", product.ID)
 	assert.Equal(t, "Test Product", product.Name)
-	assert.Equal(t, "A test product", product.Description)
 	assert.Equal(t, 19.99, product.Price)
 	assert.Equal(t, "electronics", product.Category)
 }
 
 func TestCreateProductRequest(t *testing.T) {
 	tests := []struct {
-		name        string
-		request     domain.CreateProductRequest
-		wantName    string
-		wantDesc    string
-		wantPrice   float64
+		name         string
+		request      domain.CreateProductRequest
+		wantName     string
+		wantPrice    float64
 		wantCategory string
 	}{
 		{
 			name: "full request",
 			request: domain.CreateProductRequest{
-				Name:        "New Product",
-				Description: "Brand new",
-				Price:       99.99,
-				Category:    "books",
+				Name:     "New Product",
+				Price:    99.99,
+				Category: "books",
 			},
-			wantName:    "New Product",
-			wantDesc:    "Brand new",
-			wantPrice:   99.99,
+			wantName:     "New Product",
+			wantPrice:    99.99,
 			wantCategory: "books",
 		},
 		{
@@ -58,7 +53,6 @@ func TestCreateProductRequest(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.wantName, tt.request.Name)
-			assert.Equal(t, tt.wantDesc, tt.request.Description)
 			assert.Equal(t, tt.wantPrice, tt.request.Price)
 			assert.Equal(t, tt.wantCategory, tt.request.Category)
 		})
@@ -67,24 +61,21 @@ func TestCreateProductRequest(t *testing.T) {
 
 func TestUpdateProductRequest(t *testing.T) {
 	tests := []struct {
-		name        string
-		request     domain.UpdateProductRequest
-		wantName    string
-		wantDesc    string
-		wantPrice   float64
+		name         string
+		request      domain.UpdateProductRequest
+		wantName     string
+		wantPrice    float64
 		wantCategory string
 	}{
 		{
 			name: "full update request",
 			request: domain.UpdateProductRequest{
-				Name:        "Updated Product",
-				Description: "Updated description",
-				Price:       49.99,
-				Category:    "software",
+				Name:     "Updated Product",
+				Price:    49.99,
+				Category: "software",
 			},
-			wantName:    "Updated Product",
-			wantDesc:    "Updated description",
-			wantPrice:   49.99,
+			wantName:     "Updated Product",
+			wantPrice:    49.99,
 			wantCategory: "software",
 		},
 		{
@@ -99,7 +90,6 @@ func TestUpdateProductRequest(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.wantName, tt.request.Name)
-			assert.Equal(t, tt.wantDesc, tt.request.Description)
 			assert.Equal(t, tt.wantPrice, tt.request.Price)
 			assert.Equal(t, tt.wantCategory, tt.request.Category)
 		})

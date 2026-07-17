@@ -144,9 +144,8 @@ func TestHandler_CreateProduct(t *testing.T) {
 		{
 			name: "valid product",
 			body: domain.CreateProductRequest{
-				Name:        "Test Product",
-				Description: "A test product",
-				Price:       19.99,
+				Name:  "Test Product",
+				Price: 19.99,
 			},
 			wantStatus: http.StatusCreated,
 			wantName:   "Test Product",
@@ -209,17 +208,15 @@ func TestHandler_ListProducts(t *testing.T) {
 	repo.Create(
 		context.Background(),
 		&domain.Product{
-			Name:        "Product A",
-			Description: "Desc A",
-			Price:       10.0,
+			Name:  "Product A",
+			Price: 10.0,
 		},
 	)
 	repo.Create(
 		context.Background(),
 		&domain.Product{
-			Name:        "Product B",
-			Description: "Desc B",
-			Price:       20.0,
+			Name:  "Product B",
+			Price: 20.0,
 		},
 	)
 
@@ -262,9 +259,8 @@ func TestHandler_GetProduct(t *testing.T) {
 	repo, _, _, handler := setupTestHandler()
 
 	created := domain.Product{
-		Name:        "Test",
-		Description: "Desc",
-		Price:       15.0,
+		Name:  "Test",
+		Price: 15.0,
 	}
 	repo.Create(context.Background(), &created)
 
@@ -313,9 +309,8 @@ func TestHandler_UpdateProduct(t *testing.T) {
 	repo, _, _, handler := setupTestHandler()
 
 	created := domain.Product{
-		Name:        "Original",
-		Description: "Original desc",
-		Price:       10.0,
+		Name:  "Original",
+		Price: 10.0,
 	}
 	repo.Create(context.Background(), &created)
 
@@ -330,9 +325,8 @@ func TestHandler_UpdateProduct(t *testing.T) {
 			name: "update existing product",
 			id:   created.ID,
 			body: domain.UpdateProductRequest{
-				Name:        "Updated",
-				Description: "Updated desc",
-				Price:       25.0,
+				Name:  "Updated",
+				Price: 25.0,
 			},
 			wantStatus: http.StatusOK,
 			wantName:   "Updated",
@@ -341,9 +335,8 @@ func TestHandler_UpdateProduct(t *testing.T) {
 			name: "update non-existent product",
 			id:   "non-existent-id",
 			body: domain.UpdateProductRequest{
-				Name:        "Nope",
-				Description: "Nope",
-				Price:       0,
+				Name:  "Nope",
+				Price: 0,
 			},
 			wantStatus: http.StatusNotFound,
 		},
@@ -385,14 +378,580 @@ func TestHandler_UpdateProduct(t *testing.T) {
 	}
 }
 
+func TestHandler_CreateDetail(t *testing.T) {
+	defer cleanupProducts(t)
+	repo, memberRepo, sessionCache, handler := setupTestHandler()
+	member := createAuthMember(t, memberRepo, sessionCache)
+
+	product := domain.Product{
+		Name: "Test Product",
+	}
+	err := repo.Create(context.Background(), &product)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name       string
+		id         string
+		body       any
+		wantStatus int
+	}{
+		{
+			name: "valid detail",
+			id:   product.ID,
+			body: domain.CreateDetailRequest{
+				Introduction:      "產品介紹",
+				UsageInstructions: "使用說明",
+				ReturnPolicy:      "退貨說明",
+			},
+			wantStatus: http.StatusCreated,
+		},
+		{
+			name: "non-existent product",
+			id:   "00000000-0000-0000-0000-000000000000",
+			body: domain.CreateDetailRequest{
+				Introduction: "測試",
+			},
+			wantStatus: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var bodyBytes []byte
+			switch b := tt.body.(type) {
+			case string:
+				bodyBytes = []byte(b)
+			default:
+				bodyBytes, _ = json.Marshal(b)
+			}
+
+			req := httptest.NewRequest(http.MethodPost, "/api/products/"+tt.id+"/details", bytes.NewReader(bodyBytes))
+			req.Header.Set("Content-Type", "application/json")
+			req = mux.SetURLVars(req, map[string]string{"id": tt.id})
+			req = req.WithContext(api.ContextWithMember(req.Context(), member))
+			w := httptest.NewRecorder()
+			handler.CreateDetail(w, req)
+
+			assert.Equal(t, tt.wantStatus, w.Code)
+
+			if tt.wantStatus == http.StatusCreated {
+				var resp domain.DetailResponse
+				err := json.NewDecoder(w.Body).Decode(&resp)
+				assert.NoError(t, err)
+				assert.Equal(t, "產品介紹", resp.Detail.Introduction)
+				assert.NotEmpty(t, resp.Detail.ID)
+			}
+		})
+	}
+}
+
+func TestHandler_CreateDetail_Unauthorized(t *testing.T) {
+	defer cleanupProducts(t)
+	_, _, _, handler := setupTestHandler()
+
+	body, _ := json.Marshal(domain.CreateDetailRequest{
+		Introduction: "No Auth Detail",
+	})
+
+	w := executeRequestWithVars(
+		http.MethodPost,
+		"/api/products/some-id/details",
+		body,
+		map[string]string{"id": "some-id"},
+		handler.CreateDetail,
+	)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestHandler_CreatePrice(t *testing.T) {
+	defer cleanupProducts(t)
+	repo, memberRepo, sessionCache, handler := setupTestHandler()
+	member := createAuthMember(t, memberRepo, sessionCache)
+
+	product := domain.Product{
+		Name: "Test Product",
+	}
+	err := repo.Create(context.Background(), &product)
+	require.NoError(t, err)
+
+	detail := domain.ProductDetail{
+		ProductID: product.ID,
+	}
+	err = repo.CreateDetail(context.Background(), &detail)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name       string
+		productID  string
+		detailID   string
+		body       any
+		wantStatus int
+	}{
+		{
+			name:      "valid price",
+			productID: product.ID,
+			detailID:  detail.ID,
+			body: domain.CreatePriceRequest{
+				Label:     "成人票",
+				Amount:    100.00,
+				Currency:  "TWD",
+				SortOrder: 1,
+			},
+			wantStatus: http.StatusCreated,
+		},
+		{
+			name:      "non-existent detail",
+			productID: product.ID,
+			detailID:  "00000000-0000-0000-0000-000000000000",
+			body: domain.CreatePriceRequest{
+				Label:  "Ghost",
+				Amount: 0,
+			},
+			wantStatus: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var bodyBytes []byte
+			switch b := tt.body.(type) {
+			case string:
+				bodyBytes = []byte(b)
+			default:
+				bodyBytes, _ = json.Marshal(b)
+			}
+
+			req := httptest.NewRequest(
+				http.MethodPost,
+				"/api/products/"+tt.productID+"/details/"+tt.detailID+"/prices",
+				bytes.NewReader(bodyBytes),
+			)
+			req.Header.Set("Content-Type", "application/json")
+			req = mux.SetURLVars(req, map[string]string{"id": tt.productID, "did": tt.detailID})
+			req = req.WithContext(api.ContextWithMember(req.Context(), member))
+			w := httptest.NewRecorder()
+			handler.CreatePrice(w, req)
+
+			assert.Equal(t, tt.wantStatus, w.Code)
+
+			if tt.wantStatus == http.StatusCreated {
+				var resp domain.PriceResponse
+				err := json.NewDecoder(w.Body).Decode(&resp)
+				assert.NoError(t, err)
+				assert.Equal(t, tt.detailID, resp.Price.ProductDetailID)
+				assert.NotEmpty(t, resp.Price.ID)
+			}
+		})
+	}
+}
+
+func TestHandler_CreatePrice_Unauthorized(t *testing.T) {
+	defer cleanupProducts(t)
+	_, _, _, handler := setupTestHandler()
+
+	body, _ := json.Marshal(domain.CreatePriceRequest{
+		Label:  "No Auth Price",
+		Amount: 50,
+	})
+
+	w := executeRequestWithVars(
+		http.MethodPost,
+		"/api/products/some-id/details/some-did/prices",
+		body,
+		map[string]string{"id": "some-id", "did": "some-did"},
+		handler.CreatePrice,
+	)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestHandler_GetDetail(t *testing.T) {
+	defer cleanupProducts(t)
+	repo, _, _, handler := setupTestHandler()
+
+	product := domain.Product{Name: "Test"}
+	err := repo.Create(context.Background(), &product)
+	require.NoError(t, err)
+
+	detail := domain.ProductDetail{
+		ProductID:         product.ID,
+		Introduction:      "介紹",
+		UsageInstructions: "說明",
+		ReturnPolicy:      "退貨",
+	}
+	err = repo.CreateDetail(context.Background(), &detail)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name       string
+		id         string
+		wantStatus int
+	}{
+		{
+			name:       "existing detail",
+			id:         product.ID,
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "non-existent product",
+			id:         "00000000-0000-0000-0000-000000000000",
+			wantStatus: http.StatusNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := executeRequestWithVars(
+				http.MethodGet,
+				"/api/products/"+tt.id+"/detail",
+				nil,
+				map[string]string{"id": tt.id},
+				handler.GetDetail,
+			)
+
+			assert.Equal(t, tt.wantStatus, w.Code)
+
+			if tt.wantStatus == http.StatusOK {
+				var resp domain.DetailResponse
+				err := json.NewDecoder(w.Body).Decode(&resp)
+				assert.NoError(t, err)
+				assert.Equal(t, detail.ID, resp.Detail.ID)
+				assert.Equal(t, "介紹", resp.Detail.Introduction)
+			}
+		})
+	}
+}
+
+func TestHandler_UpdateDetail(t *testing.T) {
+	defer cleanupProducts(t)
+	repo, memberRepo, sessionCache, handler := setupTestHandler()
+	member := createAuthMember(t, memberRepo, sessionCache)
+
+	product := domain.Product{Name: "Test"}
+	err := repo.Create(context.Background(), &product)
+	require.NoError(t, err)
+
+	detail := domain.ProductDetail{
+		ProductID: product.ID,
+	}
+	err = repo.CreateDetail(context.Background(), &detail)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name       string
+		id         string
+		body       any
+		wantStatus int
+	}{
+		{
+			name: "update existing detail",
+			id:   product.ID,
+			body: domain.UpdateDetailRequest{
+				Introduction:      "新介紹",
+				UsageInstructions: "新說明",
+				ReturnPolicy:      "新退貨",
+			},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name: "non-existent product",
+			id:   "00000000-0000-0000-0000-000000000000",
+			body: domain.UpdateDetailRequest{
+				Introduction: "無",
+			},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:       "invalid json",
+			id:         product.ID,
+			body:       "{invalid}",
+			wantStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var bodyBytes []byte
+			switch b := tt.body.(type) {
+			case string:
+				bodyBytes = []byte(b)
+			default:
+				bodyBytes, _ = json.Marshal(b)
+			}
+
+			req := httptest.NewRequest(
+				http.MethodPost,
+				"/api/products/"+tt.id+"/detail/update",
+				bytes.NewReader(bodyBytes),
+			)
+			req.Header.Set("Content-Type", "application/json")
+			req = mux.SetURLVars(req, map[string]string{"id": tt.id})
+			req = req.WithContext(api.ContextWithMember(req.Context(), member))
+			w := httptest.NewRecorder()
+			handler.UpdateDetail(w, req)
+
+			assert.Equal(t, tt.wantStatus, w.Code)
+
+			if tt.wantStatus == http.StatusOK {
+				var resp domain.DetailResponse
+				err := json.NewDecoder(w.Body).Decode(&resp)
+				assert.NoError(t, err)
+				assert.Equal(t, detail.ID, resp.Detail.ID)
+				assert.Equal(t, "新介紹", resp.Detail.Introduction)
+			}
+		})
+	}
+}
+
+func TestHandler_UpdateDetail_Unauthorized(t *testing.T) {
+	defer cleanupProducts(t)
+	_, _, _, handler := setupTestHandler()
+
+	body, _ := json.Marshal(domain.UpdateDetailRequest{
+		Introduction: "No Auth",
+	})
+
+	w := executeRequestWithVars(
+		http.MethodPost,
+		"/api/products/some-id/detail/update",
+		body,
+		map[string]string{"id": "some-id"},
+		handler.UpdateDetail,
+	)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestHandler_ListPrices(t *testing.T) {
+	defer cleanupProducts(t)
+	repo, _, _, handler := setupTestHandler()
+
+	product := domain.Product{Name: "Test"}
+	err := repo.Create(context.Background(), &product)
+	require.NoError(t, err)
+
+	detail := domain.ProductDetail{ProductID: product.ID}
+	err = repo.CreateDetail(context.Background(), &detail)
+	require.NoError(t, err)
+
+	repo.CreatePrice(context.Background(), &domain.ProductPrice{
+		ProductDetailID: detail.ID, Label: "A", Amount: 10, SortOrder: 1,
+	})
+	repo.CreatePrice(context.Background(), &domain.ProductPrice{
+		ProductDetailID: detail.ID, Label: "B", Amount: 20, SortOrder: 2,
+	})
+
+	t.Run("list prices", func(t *testing.T) {
+		w := executeRequestWithVars(
+			http.MethodGet,
+			"/api/products/"+product.ID+"/detail/prices",
+			nil,
+			map[string]string{"id": product.ID},
+			handler.ListPrices,
+		)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var resp domain.PriceListResponse
+		err := json.NewDecoder(w.Body).Decode(&resp)
+		assert.NoError(t, err)
+		assert.Len(t, resp.Prices, 2)
+	})
+
+	t.Run("non-existent product", func(t *testing.T) {
+		w := executeRequestWithVars(
+			http.MethodGet,
+			"/api/products/00000000-0000-0000-0000-000000000000/detail/prices",
+			nil,
+			map[string]string{"id": "00000000-0000-0000-0000-000000000000"},
+			handler.ListPrices,
+		)
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+}
+
+func TestHandler_GetPrice(t *testing.T) {
+	defer cleanupProducts(t)
+	repo, _, _, handler := setupTestHandler()
+
+	product := domain.Product{Name: "Test"}
+	err := repo.Create(context.Background(), &product)
+	require.NoError(t, err)
+
+	detail := domain.ProductDetail{ProductID: product.ID}
+	err = repo.CreateDetail(context.Background(), &detail)
+	require.NoError(t, err)
+
+	price := domain.ProductPrice{
+		ProductDetailID: detail.ID,
+		Label:           "成人票",
+		Amount:          100,
+		SortOrder:       1,
+	}
+	err = repo.CreatePrice(context.Background(), &price)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name       string
+		productID  string
+		priceID    string
+		wantStatus int
+	}{
+		{
+			name:       "existing price",
+			productID:  product.ID,
+			priceID:    price.ID,
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "non-existent price",
+			productID:  product.ID,
+			priceID:    "00000000-0000-0000-0000-000000000000",
+			wantStatus: http.StatusNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := executeRequestWithVars(
+				http.MethodGet,
+				"/api/products/"+tt.productID+"/detail/prices/"+tt.priceID,
+				nil,
+				map[string]string{"id": tt.productID, "pid": tt.priceID},
+				handler.GetPrice,
+			)
+
+			assert.Equal(t, tt.wantStatus, w.Code)
+
+			if tt.wantStatus == http.StatusOK {
+				var resp domain.PriceResponse
+				err := json.NewDecoder(w.Body).Decode(&resp)
+				assert.NoError(t, err)
+				assert.Equal(t, price.ID, resp.Price.ID)
+				assert.Equal(t, "成人票", resp.Price.Label)
+			}
+		})
+	}
+}
+
+func TestHandler_UpdatePrice(t *testing.T) {
+	defer cleanupProducts(t)
+	repo, memberRepo, sessionCache, handler := setupTestHandler()
+	member := createAuthMember(t, memberRepo, sessionCache)
+
+	product := domain.Product{Name: "Test"}
+	err := repo.Create(context.Background(), &product)
+	require.NoError(t, err)
+
+	detail := domain.ProductDetail{ProductID: product.ID}
+	err = repo.CreateDetail(context.Background(), &detail)
+	require.NoError(t, err)
+
+	price := domain.ProductPrice{
+		ProductDetailID: detail.ID,
+		Label:           "原價",
+		Amount:          100,
+		SortOrder:       1,
+	}
+	err = repo.CreatePrice(context.Background(), &price)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name       string
+		productID  string
+		priceID    string
+		body       any
+		wantStatus int
+	}{
+		{
+			name:      "update existing price",
+			productID: product.ID,
+			priceID:   price.ID,
+			body: domain.UpdatePriceRequest{
+				Label:     "特價",
+				Amount:    80,
+				Currency:  "USD",
+				SortOrder: 2,
+			},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:      "non-existent price",
+			productID: product.ID,
+			priceID:   "00000000-0000-0000-0000-000000000000",
+			body: domain.UpdatePriceRequest{
+				Label:  "Ghost",
+				Amount: 0,
+			},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:       "invalid json",
+			productID:  product.ID,
+			priceID:    price.ID,
+			body:       "{invalid}",
+			wantStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var bodyBytes []byte
+			switch b := tt.body.(type) {
+			case string:
+				bodyBytes = []byte(b)
+			default:
+				bodyBytes, _ = json.Marshal(b)
+			}
+
+			req := httptest.NewRequest(
+				http.MethodPost,
+				"/api/products/"+tt.productID+"/detail/prices/"+tt.priceID+"/update",
+				bytes.NewReader(bodyBytes),
+			)
+			req.Header.Set("Content-Type", "application/json")
+			req = mux.SetURLVars(req, map[string]string{"id": tt.productID, "pid": tt.priceID})
+			req = req.WithContext(api.ContextWithMember(req.Context(), member))
+			w := httptest.NewRecorder()
+			handler.UpdatePrice(w, req)
+
+			assert.Equal(t, tt.wantStatus, w.Code)
+
+			if tt.wantStatus == http.StatusOK {
+				var resp domain.PriceResponse
+				err := json.NewDecoder(w.Body).Decode(&resp)
+				assert.NoError(t, err)
+				assert.Equal(t, price.ID, resp.Price.ID)
+				assert.Equal(t, "特價", resp.Price.Label)
+			}
+		})
+	}
+}
+
+func TestHandler_UpdatePrice_Unauthorized(t *testing.T) {
+	defer cleanupProducts(t)
+	_, _, _, handler := setupTestHandler()
+
+	body, _ := json.Marshal(domain.UpdatePriceRequest{
+		Label:  "No Auth",
+		Amount: 50,
+	})
+
+	w := executeRequestWithVars(
+		http.MethodPost,
+		"/api/products/some-id/detail/prices/some-pid/update",
+		body,
+		map[string]string{"id": "some-id", "pid": "some-pid"},
+		handler.UpdatePrice,
+	)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
 func TestHandler_DeleteProduct(t *testing.T) {
 	defer cleanupProducts(t)
 	repo, _, _, handler := setupTestHandler()
 
 	created := domain.Product{
-		Name:        "To Delete",
-		Description: "Desc",
-		Price:       5.0,
+		Name:  "To Delete",
+		Price: 5.0,
 	}
 	repo.Create(context.Background(), &created)
 
