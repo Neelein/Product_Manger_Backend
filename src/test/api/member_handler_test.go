@@ -3,6 +3,7 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -18,18 +19,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupMemberHandler() (*database.MemberRepositoryPGX, *database.SessionRepositoryPGX, *api.MemberHandler) {
+func setupMemberHandler() (*database.MemberRepositoryPGX, *database.SessionCache, *api.MemberHandler) {
 	memberRepo := database.NewMemberRepositoryPGX(testPool)
-	sessionRepo := database.NewSessionRepositoryPGX(testPool)
-	handler := api.NewMemberHandler(memberRepo, sessionRepo)
-	return memberRepo, sessionRepo, handler
+	sessionCache := database.NewSessionCache(24 * time.Hour)
+	handler := api.NewMemberHandler(memberRepo, sessionCache)
+	return memberRepo, sessionCache, handler
 }
 
 func cleanupMembers(t *testing.T) {
 	t.Helper()
 	_, err := testPool.Exec(context.Background(), "TRUNCATE TABLE members CASCADE")
-	require.NoError(t, err)
-	_, err = testPool.Exec(context.Background(), "TRUNCATE TABLE sessions CASCADE")
 	require.NoError(t, err)
 }
 
@@ -133,7 +132,7 @@ func TestHandler_Login_WrongPassword(t *testing.T) {
 
 func TestHandler_Me(t *testing.T) {
 	defer cleanupMembers(t)
-	_, _, handler := setupMemberHandler()
+	_, sessionCache, handler := setupMemberHandler()
 
 	regBody, _ := json.Marshal(domain.RegisterRequest{
 		Email:    "me@example.com",
@@ -150,17 +149,27 @@ func TestHandler_Me(t *testing.T) {
 	w = executeRequest(http.MethodPost, "/api/members/login", loginBody, handler.LoginMember)
 	require.Equal(t, http.StatusOK, w.Code)
 
-	sessionCookie := w.Result().Cookies()[0]
+	var loginResp domain.LoginResponse
+	err := json.NewDecoder(w.Body).Decode(&loginResp)
+	require.NoError(t, err)
+
+	member, err := sessionCache.GetByKey(context.Background(), w.Result().Cookies()[0].Value)
+	require.NoError(t, err)
+	require.NotNil(t, member)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/members/me", nil)
-	req.AddCookie(sessionCookie)
+	req = req.WithContext(api.ContextWithMember(req.Context(), &domain.Member{
+		ID:    loginResp.Member.ID,
+		Email: loginResp.Member.Email,
+		Name:  loginResp.Member.Name,
+	}))
 	w = httptest.NewRecorder()
 	handler.GetCurrentMember(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var resp domain.MemberResponse
-	err := json.NewDecoder(w.Body).Decode(&resp)
+	err = json.NewDecoder(w.Body).Decode(&resp)
 	assert.NoError(t, err)
 	assert.Equal(t, "me@example.com", resp.Email)
 	assert.Equal(t, "Me User", resp.Name)
@@ -176,7 +185,7 @@ func TestHandler_Me_NoCookie(t *testing.T) {
 
 func TestHandler_Me_ExpiredSession(t *testing.T) {
 	defer cleanupMembers(t)
-	_, _, handler := setupMemberHandler()
+	_, sessionCache, handler := setupMemberHandler()
 
 	regBody, _ := json.Marshal(domain.RegisterRequest{
 		Email:    "expired@example.com",
@@ -195,13 +204,9 @@ func TestHandler_Me_ExpiredSession(t *testing.T) {
 
 	sessionCookie := w.Result().Cookies()[0]
 
-	_, err := testPool.Exec(context.Background(),
-		`UPDATE sessions SET expires_at = $1 WHERE session_key = $2`,
-		time.Now().Add(-1*time.Hour), sessionCookie.Value)
-	require.NoError(t, err)
+	sessionCache.Delete(context.Background(), sessionCookie.Value)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/members/me", nil)
-	req.AddCookie(sessionCookie)
 	w = httptest.NewRecorder()
 	handler.GetCurrentMember(w, req)
 
@@ -227,7 +232,15 @@ func TestHandler_UpdateMember(t *testing.T) {
 	w = executeRequest(http.MethodPost, "/api/members/login", loginBody, handler.LoginMember)
 	require.Equal(t, http.StatusOK, w.Code)
 
-	sessionCookie := w.Result().Cookies()[0]
+	var loginResp domain.LoginResponse
+	err := json.NewDecoder(w.Body).Decode(&loginResp)
+	require.NoError(t, err)
+
+	memberCtx := api.ContextWithMember(context.Background(), &domain.Member{
+		ID:    loginResp.Member.ID,
+		Email: loginResp.Member.Email,
+		Name:  loginResp.Member.Name,
+	})
 
 	t.Run("successful update", func(t *testing.T) {
 		updateBody, _ := json.Marshal(domain.UpdateMemberRequest{
@@ -236,7 +249,7 @@ func TestHandler_UpdateMember(t *testing.T) {
 		})
 		req := httptest.NewRequest(http.MethodPost, "/api/members/update", bytes.NewReader(updateBody))
 		req.Header.Set("Content-Type", "application/json")
-		req.AddCookie(sessionCookie)
+		req = req.WithContext(memberCtx)
 		w = httptest.NewRecorder()
 		handler.UpdateMember(w, req)
 
@@ -249,7 +262,7 @@ func TestHandler_UpdateMember(t *testing.T) {
 		assert.Equal(t, "Updated Name", resp.Name)
 	})
 
-	t.Run("update without auth cookie", func(t *testing.T) {
+	t.Run("update without auth", func(t *testing.T) {
 		updateBody, _ := json.Marshal(domain.UpdateMemberRequest{
 			Email: "noauth@example.com",
 			Name:  "No Auth",
@@ -265,7 +278,7 @@ func TestHandler_UpdateMember(t *testing.T) {
 		})
 		req := httptest.NewRequest(http.MethodPost, "/api/members/update", bytes.NewReader(updateBody))
 		req.Header.Set("Content-Type", "application/json")
-		req.AddCookie(sessionCookie)
+		req = req.WithContext(memberCtx)
 		w = httptest.NewRecorder()
 		handler.UpdateMember(w, req)
 
@@ -287,7 +300,7 @@ func TestHandler_UpdateMember(t *testing.T) {
 		})
 		req := httptest.NewRequest(http.MethodPost, "/api/members/update", bytes.NewReader(updateBody))
 		req.Header.Set("Content-Type", "application/json")
-		req.AddCookie(sessionCookie)
+		req = req.WithContext(memberCtx)
 		w = httptest.NewRecorder()
 		handler.UpdateMember(w, req)
 

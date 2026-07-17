@@ -23,6 +23,12 @@ func (h *ProductHandler) CreateProduct(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
+	member := MemberFromContext(r.Context())
+	if member == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
 	var req domain.CreateProductRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -34,6 +40,7 @@ func (h *ProductHandler) CreateProduct(
 		Description: req.Description,
 		Price:       req.Price,
 		Category:    req.Category,
+		CreatedBy:   member.ID,
 	}
 
 	if err := h.repo.Create(context.Background(), &product); err != nil {

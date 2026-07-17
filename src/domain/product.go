@@ -8,6 +8,7 @@ type Product struct {
 	Description string    `json:"description"`
 	Price       float64   `json:"price"`
 	Category    string    `json:"category"`
+	CreatedBy   string    `json:"created_by"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }

@@ -5,12 +5,19 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"time"
 
 	"backend/src/domain"
 
 	"golang.org/x/crypto/bcrypt"
 )
+
+func memberFromRequest(r *http.Request) *domain.Member {
+	m := MemberFromContext(r.Context())
+	if m == nil {
+		return nil
+	}
+	return m
+}
 
 type MemberHandler struct {
 	memberRepo  domain.MemberRepository
@@ -135,9 +142,9 @@ func (h *MemberHandler) LogoutMember(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *MemberHandler) UpdateMember(w http.ResponseWriter, r *http.Request) {
-	member, err := h.authenticateMember(r)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, err.Error())
+	member := memberFromRequest(r)
+	if member == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
@@ -176,9 +183,9 @@ func (h *MemberHandler) UpdateMember(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *MemberHandler) GetCurrentMember(w http.ResponseWriter, r *http.Request) {
-	member, err := h.authenticateMember(r)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, err.Error())
+	member := memberFromRequest(r)
+	if member == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
@@ -189,31 +196,4 @@ func (h *MemberHandler) GetCurrentMember(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-func (h *MemberHandler) authenticateMember(r *http.Request) (*domain.Member, error) {
-	cookie, err := r.Cookie("session_key")
-	if err != nil {
-		return nil, errors.New("unauthorized")
-	}
 
-	session, err := h.sessionRepo.GetByKey(context.Background(), cookie.Value)
-	if err != nil {
-		return nil, errors.New("unauthorized")
-	}
-	if session == nil {
-		return nil, errors.New("unauthorized")
-	}
-
-	if session.ExpiresAt.Before(time.Now()) {
-		return nil, errors.New("session expired")
-	}
-
-	member, err := h.memberRepo.GetByID(context.Background(), session.MemberID)
-	if err != nil {
-		return nil, errors.New("unauthorized")
-	}
-	if member == nil {
-		return nil, errors.New("unauthorized")
-	}
-
-	return member, nil
-}

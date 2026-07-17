@@ -50,7 +50,7 @@ func TestMain(m *testing.M) {
 }
 
 func dropTables(ctx context.Context, pool *pgxpool.Pool) {
-	for _, table := range []string{"sessions", "members", "product_prices", "product_details", "products"} {
+	for _, table := range []string{"members", "product_prices", "product_details", "products"} {
 		_, _ = pool.Exec(ctx, "DROP TABLE IF EXISTS "+table+" CASCADE")
 	}
 }
@@ -59,6 +59,7 @@ func runMigration(ctx context.Context, pool *pgxpool.Pool) {
 	for _, file := range []string{
 		"../../../db/migrations/001_create_products.sql",
 		"../../../db/migrations/002_create_members.sql",
+		"../../../db/migrations/003_add_member_id_to_products.sql",
 	} {
 		schema, err := os.ReadFile(file)
 		if err != nil {
@@ -71,16 +72,36 @@ func runMigration(ctx context.Context, pool *pgxpool.Pool) {
 	}
 }
 
-func setupTestHandler() (*database.ProductRepositoryPGX, *api.ProductHandler) {
+func setupTestHandler() (*database.ProductRepositoryPGX, *database.MemberRepositoryPGX, *database.SessionCache, *api.ProductHandler) {
 	repo := database.NewProductRepositoryPGX(testPool)
+	memberRepo := database.NewMemberRepositoryPGX(testPool)
+	sessionCache := database.NewSessionCache(24 * time.Hour)
 	handler := api.NewProductHandler(repo)
-	return repo, handler
+	return repo, memberRepo, sessionCache, handler
 }
 
 func cleanupProducts(t *testing.T) {
 	t.Helper()
-	_, err := testPool.Exec(context.Background(), "TRUNCATE TABLE products CASCADE")
+	_, err := testPool.Exec(context.Background(), "TRUNCATE TABLE products, members CASCADE")
 	require.NoError(t, err)
+}
+
+func createAuthMember(t *testing.T, memberRepo *database.MemberRepositoryPGX, sessionCache *database.SessionCache) *domain.Member {
+	t.Helper()
+
+	member := domain.Member{
+		Email:    "test-" + t.Name() + "@example.com",
+		Password: "password",
+		Name:     "Test User",
+	}
+	err := memberRepo.Create(context.Background(), &member)
+	require.NoError(t, err)
+
+	session := domain.Session{MemberID: member.ID}
+	err = sessionCache.Create(context.Background(), &session)
+	require.NoError(t, err)
+
+	return &member
 }
 
 func executeRequest(
@@ -111,7 +132,8 @@ func executeRequestWithVars(
 
 func TestHandler_CreateProduct(t *testing.T) {
 	defer cleanupProducts(t)
-	_, handler := setupTestHandler()
+	repo, memberRepo, sessionCache, handler := setupTestHandler()
+	member := createAuthMember(t, memberRepo, sessionCache)
 
 	tests := []struct {
 		name       string
@@ -146,12 +168,11 @@ func TestHandler_CreateProduct(t *testing.T) {
 				bodyBytes, _ = json.Marshal(b)
 			}
 
-			w := executeRequest(
-				http.MethodPost,
-				"/api/products",
-				bodyBytes,
-				handler.CreateProduct,
-			)
+			req := httptest.NewRequest(http.MethodPost, "/api/products", bytes.NewReader(bodyBytes))
+			req.Header.Set("Content-Type", "application/json")
+			req = req.WithContext(api.ContextWithMember(req.Context(), member))
+			w := httptest.NewRecorder()
+			handler.CreateProduct(w, req)
 
 			assert.Equal(t, tt.wantStatus, w.Code)
 
@@ -161,14 +182,29 @@ func TestHandler_CreateProduct(t *testing.T) {
 				assert.NoError(t, err)
 				assert.Equal(t, tt.wantName, resp.Product.Name)
 				assert.NotEmpty(t, resp.Product.ID)
+				assert.NotEmpty(t, resp.Product.CreatedBy)
 			}
 		})
 	}
+
+	_ = repo
+}
+
+func TestHandler_CreateProduct_Unauthorized(t *testing.T) {
+	defer cleanupProducts(t)
+	_, _, _, handler := setupTestHandler()
+
+	body, _ := json.Marshal(domain.CreateProductRequest{
+		Name: "No Auth Product",
+	})
+
+	w := executeRequest(http.MethodPost, "/api/products", body, handler.CreateProduct)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestHandler_ListProducts(t *testing.T) {
 	defer cleanupProducts(t)
-	repo, handler := setupTestHandler()
+	repo, _, _, handler := setupTestHandler()
 
 	repo.Create(
 		context.Background(),
@@ -204,7 +240,7 @@ func TestHandler_ListProducts(t *testing.T) {
 
 func TestHandler_ListProducts_Empty(t *testing.T) {
 	defer cleanupProducts(t)
-	_, handler := setupTestHandler()
+	_, _, _, handler := setupTestHandler()
 
 	w := executeRequest(
 		http.MethodGet,
@@ -223,7 +259,7 @@ func TestHandler_ListProducts_Empty(t *testing.T) {
 
 func TestHandler_GetProduct(t *testing.T) {
 	defer cleanupProducts(t)
-	repo, handler := setupTestHandler()
+	repo, _, _, handler := setupTestHandler()
 
 	created := domain.Product{
 		Name:        "Test",
@@ -274,7 +310,7 @@ func TestHandler_GetProduct(t *testing.T) {
 
 func TestHandler_UpdateProduct(t *testing.T) {
 	defer cleanupProducts(t)
-	repo, handler := setupTestHandler()
+	repo, _, _, handler := setupTestHandler()
 
 	created := domain.Product{
 		Name:        "Original",
@@ -351,7 +387,7 @@ func TestHandler_UpdateProduct(t *testing.T) {
 
 func TestHandler_DeleteProduct(t *testing.T) {
 	defer cleanupProducts(t)
-	repo, handler := setupTestHandler()
+	repo, _, _, handler := setupTestHandler()
 
 	created := domain.Product{
 		Name:        "To Delete",
