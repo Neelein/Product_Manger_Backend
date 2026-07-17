@@ -81,7 +81,7 @@ func (c *SessionCache) GetByKey(_ context.Context, sessionKey string) (*domain.S
 	return s, nil
 }
 
-func (c *SessionCache) Rotate(_ context.Context, oldKey string) (*domain.Session, error) {
+func (c *SessionCache) Rotate(_ context.Context, oldKey string, fingerprint string) (*domain.Session, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -93,13 +93,17 @@ func (c *SessionCache) Rotate(_ context.Context, oldKey string) (*domain.Session
 		delete(c.sessions, oldKey)
 		return nil, domain.ErrSessionExpired
 	}
+	if s.DeviceFingerprint != "" && s.DeviceFingerprint != fingerprint {
+		return nil, domain.ErrDeviceMismatch
+	}
 
 	newSession := &domain.Session{
-		ID:         uuid.New().String(),
-		MemberID:   s.MemberID,
-		SessionKey: uuid.New().String(),
-		CreatedAt:  time.Now(),
-		ExpiresAt:  s.ExpiresAt,
+		ID:                uuid.New().String(),
+		MemberID:          s.MemberID,
+		SessionKey:        uuid.New().String(),
+		DeviceFingerprint: fingerprint,
+		CreatedAt:         time.Now(),
+		ExpiresAt:         s.ExpiresAt,
 	}
 
 	delete(c.sessions, oldKey)

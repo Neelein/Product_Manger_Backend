@@ -308,6 +308,49 @@ func TestHandler_UpdateMember(t *testing.T) {
 	})
 }
 
+func TestHandler_DeviceMismatch(t *testing.T) {
+	defer cleanupMembers(t)
+	memberRepo, sessionCache, handler := setupMemberHandler()
+
+	regBody, _ := json.Marshal(domain.RegisterRequest{
+		Email:    "fingerprint@example.com",
+		Password: "password",
+		Name:     "Fingerprint User",
+	})
+	w := executeRequest(http.MethodPost, "/api/members/register", regBody, handler.RegisterMember)
+	require.Equal(t, http.StatusCreated, w.Code)
+
+	loginBody, _ := json.Marshal(domain.LoginRequest{
+		Email:    "fingerprint@example.com",
+		Password: "password",
+	})
+	w = executeRequest(http.MethodPost, "/api/members/login", loginBody, handler.LoginMember)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	sessionCookie := w.Result().Cookies()[0]
+	require.NotNil(t, sessionCookie)
+
+	dummyHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"ok":"true"}`))
+	})
+
+	auth := api.AuthMiddleware(sessionCache, memberRepo)
+	req := httptest.NewRequest(http.MethodGet, "/api/members/me", nil)
+	req.Header.Set("User-Agent", "HackerBrowser/1.0")
+	req.AddCookie(sessionCookie)
+	w = httptest.NewRecorder()
+	auth(dummyHandler).ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+
+	var resp domain.ErrorResponse
+	err := json.NewDecoder(w.Body).Decode(&resp)
+	assert.NoError(t, err)
+	assert.Equal(t, "device mismatch", resp.Error)
+}
+
 func TestHandler_Logout(t *testing.T) {
 	defer cleanupMembers(t)
 	_, _, handler := setupMemberHandler()

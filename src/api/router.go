@@ -17,6 +17,13 @@ func RegisterProductRoutes(r *mux.Router, repo domain.ProductRepository, memberR
 	r.HandleFunc("/api/products/{id}", h.GetProduct).Methods("GET")
 	r.HandleFunc("/api/products/{id}/update", h.UpdateProduct).Methods("POST")
 	r.HandleFunc("/api/products/{id}/delete", h.DeleteProduct).Methods("POST")
+	r.HandleFunc("/api/products/{id}/detail", h.GetDetail).Methods("GET")
+	r.Handle("/api/products/{id}/detail/update", auth(http.HandlerFunc(h.UpdateDetail))).Methods("POST")
+	r.HandleFunc("/api/products/{id}/detail/prices", h.ListPrices).Methods("GET")
+	r.HandleFunc("/api/products/{id}/detail/prices/{pid}", h.GetPrice).Methods("GET")
+	r.Handle("/api/products/{id}/detail/prices/{pid}/update", auth(http.HandlerFunc(h.UpdatePrice))).Methods("POST")
+	r.Handle("/api/products/{id}/details", auth(http.HandlerFunc(h.CreateDetail))).Methods("POST")
+	r.Handle("/api/products/{id}/details/{did}/prices", auth(http.HandlerFunc(h.CreatePrice))).Methods("POST")
 }
 
 func RegisterMemberRoutes(r *mux.Router, memberRepo domain.MemberRepository, sessionRepo domain.SessionRepository) {
