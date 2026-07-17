@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"backend/src/api"
 	"backend/src/database"
@@ -25,14 +26,15 @@ func main() {
 	defer pool.Close()
 	repo := database.NewProductRepositoryPGX(pool)
 	memberRepo := database.NewMemberRepositoryPGX(pool)
-	sessionRepo := database.NewSessionRepositoryPGX(pool)
+	sessionRepo := database.NewSessionCache(24 * time.Hour)
+	defer sessionRepo.Stop()
 
 	r := mux.NewRouter()
 
 	r.HandleFunc("/", homeHandler).Methods("GET")
 	r.HandleFunc("/api/health", healthHandler).Methods("GET")
 
-	api.RegisterProductRoutes(r, repo)
+	api.RegisterProductRoutes(r, repo, memberRepo, sessionRepo)
 	api.RegisterMemberRoutes(r, memberRepo, sessionRepo)
 
 	log.Println("Server starting on :8080")

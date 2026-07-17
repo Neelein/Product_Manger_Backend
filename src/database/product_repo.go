@@ -31,11 +31,16 @@ func (r *ProductRepositoryPGX) Create(
 		category = &product.Category
 	}
 
+	var memberID *string
+	if product.CreatedBy != "" {
+		memberID = &product.CreatedBy
+	}
+
 	err := r.pool.QueryRow(ctx,
-		`INSERT INTO products (type, name, description, category)
-		 VALUES ($1, $2, $3, $4)
+		`INSERT INTO products (type, name, description, category, member_id)
+		 VALUES ($1, $2, $3, $4, $5)
 		 RETURNING id, created_at, updated_at`,
-		"product", product.Name, description, category,
+		"product", product.Name, description, category, memberID,
 	).Scan(&product.ID, &product.CreatedAt, &product.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("creating product: %w", err)
