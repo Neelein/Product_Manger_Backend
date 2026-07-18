@@ -33,8 +33,6 @@ func (h *InventoryHandler) CreateInventory(w http.ResponseWriter, r *http.Reques
 
 	inventory := domain.Inventory{
 		ProductPriceID: req.ProductPriceID,
-		Name:           req.Name,
-		TotalQuantity:  req.TotalQuantity,
 		Status:         req.Status,
 	}
 
@@ -89,8 +87,6 @@ func (h *InventoryHandler) UpdateInventory(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	inventory.Name = req.Name
-	inventory.TotalQuantity = req.TotalQuantity
 	inventory.Status = req.Status
 
 	if err := h.repo.UpdateInventory(context.Background(), inventory); err != nil {

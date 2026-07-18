@@ -6,9 +6,9 @@ type Inventory struct {
 	ID             string    `json:"id"`
 	ProductPriceID string    `json:"product_price_id"`
 	Name           string    `json:"name"`
+	Status         string    `json:"status"`
 	TotalQuantity  int       `json:"total_quantity"`
 	SoldQuantity   int       `json:"sold_quantity"`
-	Status         string    `json:"status"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
 }
@@ -27,15 +27,11 @@ type InventoryItem struct {
 
 type CreateInventoryRequest struct {
 	ProductPriceID string `json:"product_price_id"`
-	Name           string `json:"name"`
-	TotalQuantity  int    `json:"total_quantity"`
 	Status         string `json:"status"`
 }
 
 type UpdateInventoryRequest struct {
-	Name          string `json:"name"`
-	TotalQuantity int    `json:"total_quantity"`
-	Status        string `json:"status"`
+	Status string `json:"status"`
 }
 
 type CreateInventoryItemRequest struct {

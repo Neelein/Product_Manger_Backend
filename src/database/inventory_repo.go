@@ -20,6 +20,19 @@ func NewInventoryRepositoryPGX(pool *pgxpool.Pool) *InventoryRepositoryPGX {
 	return &InventoryRepositoryPGX{pool: pool}
 }
 
+func (r *InventoryRepositoryPGX) scanInventory(row pgx.Row) (*domain.Inventory, error) {
+	var inv domain.Inventory
+	err := row.Scan(
+		&inv.ID, &inv.ProductPriceID, &inv.Name, &inv.Status,
+		&inv.TotalQuantity, &inv.SoldQuantity,
+		&inv.CreatedAt, &inv.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &inv, nil
+}
+
 func (r *InventoryRepositoryPGX) CreateInventory(
 	ctx context.Context,
 	inventory *domain.Inventory,
@@ -29,12 +42,8 @@ func (r *InventoryRepositoryPGX) CreateInventory(
 		status = "銷售中"
 	}
 
-	err := r.pool.QueryRow(ctx,
-		`INSERT INTO inventories (product_price_id, name, total_quantity, sold_quantity, status)
-		 VALUES ($1, $2, $3, $4, $5)
-		 RETURNING id, created_at, updated_at`,
-		inventory.ProductPriceID, inventory.Name, inventory.TotalQuantity,
-		inventory.SoldQuantity, status,
+	err := r.pool.QueryRow(ctx, "SELECT * FROM create_inventory($1, $2)",
+		inventory.ProductPriceID, status,
 	).Scan(&inventory.ID, &inventory.CreatedAt, &inventory.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("creating inventory: %w", err)
@@ -47,14 +56,7 @@ func (r *InventoryRepositoryPGX) GetInventoryByID(
 	ctx context.Context,
 	id string,
 ) (*domain.Inventory, error) {
-	var inv domain.Inventory
-
-	err := r.pool.QueryRow(ctx,
-		`SELECT id, product_price_id, name, total_quantity, sold_quantity, status,
-		        created_at, updated_at
-		 FROM inventories WHERE id = $1`, id,
-	).Scan(&inv.ID, &inv.ProductPriceID, &inv.Name, &inv.TotalQuantity,
-		&inv.SoldQuantity, &inv.Status, &inv.CreatedAt, &inv.UpdatedAt)
+	inv, err := r.scanInventory(r.pool.QueryRow(ctx, "SELECT * FROM get_inventory_by_id($1)", id))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrInventoryNotFound
@@ -62,21 +64,14 @@ func (r *InventoryRepositoryPGX) GetInventoryByID(
 		return nil, fmt.Errorf("getting inventory by ID: %w", err)
 	}
 
-	return &inv, nil
+	return inv, nil
 }
 
 func (r *InventoryRepositoryPGX) GetInventoryByPriceID(
 	ctx context.Context,
 	priceID string,
 ) (*domain.Inventory, error) {
-	var inv domain.Inventory
-
-	err := r.pool.QueryRow(ctx,
-		`SELECT id, product_price_id, name, total_quantity, sold_quantity, status,
-		        created_at, updated_at
-		 FROM inventories WHERE product_price_id = $1`, priceID,
-	).Scan(&inv.ID, &inv.ProductPriceID, &inv.Name, &inv.TotalQuantity,
-		&inv.SoldQuantity, &inv.Status, &inv.CreatedAt, &inv.UpdatedAt)
+	inv, err := r.scanInventory(r.pool.QueryRow(ctx, "SELECT * FROM get_inventory_by_price_id($1)", priceID))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrInventoryNotFound
@@ -84,17 +79,13 @@ func (r *InventoryRepositoryPGX) GetInventoryByPriceID(
 		return nil, fmt.Errorf("getting inventory by price ID: %w", err)
 	}
 
-	return &inv, nil
+	return inv, nil
 }
 
 func (r *InventoryRepositoryPGX) ListInventories(
 	ctx context.Context,
 ) ([]domain.Inventory, error) {
-	rows, err := r.pool.Query(ctx,
-		`SELECT id, product_price_id, name, total_quantity, sold_quantity, status,
-		        created_at, updated_at
-		 FROM inventories
-		 ORDER BY created_at DESC`)
+	rows, err := r.pool.Query(ctx, "SELECT * FROM list_inventories()")
 	if err != nil {
 		return nil, fmt.Errorf("listing inventories: %w", err)
 	}
@@ -102,13 +93,11 @@ func (r *InventoryRepositoryPGX) ListInventories(
 
 	var inventories []domain.Inventory
 	for rows.Next() {
-		var inv domain.Inventory
-		err := rows.Scan(&inv.ID, &inv.ProductPriceID, &inv.Name, &inv.TotalQuantity,
-			&inv.SoldQuantity, &inv.Status, &inv.CreatedAt, &inv.UpdatedAt)
+		inv, err := r.scanInventory(rows)
 		if err != nil {
 			return nil, fmt.Errorf("scanning inventory row: %w", err)
 		}
-		inventories = append(inventories, inv)
+		inventories = append(inventories, *inv)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -126,31 +115,14 @@ func (r *InventoryRepositoryPGX) UpdateInventory(
 	ctx context.Context,
 	inventory *domain.Inventory,
 ) error {
-	status := inventory.Status
-	if status == "" {
-		status = "銷售中"
-	}
-
-	ct, err := r.pool.Exec(ctx,
-		`UPDATE inventories
-		 SET name = $1, total_quantity = $2, sold_quantity = $3, status = $4, updated_at = now()
-		 WHERE id = $5`,
-		inventory.Name, inventory.TotalQuantity, inventory.SoldQuantity,
-		status, inventory.ID,
-	)
-	if err != nil {
-		return fmt.Errorf("updating inventory: %w", err)
-	}
-
-	if ct.RowsAffected() == 0 {
-		return domain.ErrInventoryNotFound
-	}
-
-	err = r.pool.QueryRow(ctx,
-		`SELECT updated_at FROM inventories WHERE id = $1`, inventory.ID,
+	err := r.pool.QueryRow(ctx, "SELECT * FROM update_inventory($1, $2)",
+		inventory.ID, inventory.Status,
 	).Scan(&inventory.UpdatedAt)
 	if err != nil {
-		return fmt.Errorf("reading updated inventory timestamp: %w", err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.ErrInventoryNotFound
+		}
+		return fmt.Errorf("updating inventory: %w", err)
 	}
 
 	return nil
@@ -160,12 +132,12 @@ func (r *InventoryRepositoryPGX) DeleteInventory(
 	ctx context.Context,
 	id string,
 ) error {
-	ct, err := r.pool.Exec(ctx, `DELETE FROM inventories WHERE id = $1`, id)
+	var deleted bool
+	err := r.pool.QueryRow(ctx, "SELECT * FROM delete_inventory($1)", id).Scan(&deleted)
 	if err != nil {
 		return fmt.Errorf("deleting inventory: %w", err)
 	}
-
-	if ct.RowsAffected() == 0 {
+	if !deleted {
 		return domain.ErrInventoryNotFound
 	}
 
@@ -191,10 +163,7 @@ func (r *InventoryRepositoryPGX) CreateItem(
 		status = "可用"
 	}
 
-	err := r.pool.QueryRow(ctx,
-		`INSERT INTO inventory_items (inventory_id, item_code, status, cost, date_added)
-		 VALUES ($1, $2, $3, $4, $5)
-		 RETURNING id, status_updated_at, created_at, updated_at`,
+	err := r.pool.QueryRow(ctx, "SELECT * FROM create_inventory_item($1, $2, $3, $4, $5)",
 		item.InventoryID, item.ItemCode, status, cost, dateAdded,
 	).Scan(&item.ID, &item.StatusUpdatedAt, &item.CreatedAt, &item.UpdatedAt)
 	if err != nil {
@@ -214,10 +183,7 @@ func (r *InventoryRepositoryPGX) GetItemByID(
 		dateAddr time.Time
 	)
 
-	err := r.pool.QueryRow(ctx,
-		`SELECT id, inventory_id, item_code, status, cost, date_added,
-		        status_updated_at, created_at, updated_at
-		 FROM inventory_items WHERE id = $1`, id,
+	err := r.pool.QueryRow(ctx, "SELECT * FROM get_inventory_item_by_id($1)", id,
 	).Scan(&item.ID, &item.InventoryID, &item.ItemCode, &item.Status,
 		&cost, &dateAddr, &item.StatusUpdatedAt,
 		&item.CreatedAt, &item.UpdatedAt)
@@ -240,13 +206,7 @@ func (r *InventoryRepositoryPGX) ListItemsByInventoryID(
 	ctx context.Context,
 	inventoryID string,
 ) ([]domain.InventoryItem, error) {
-	rows, err := r.pool.Query(ctx,
-		`SELECT id, inventory_id, item_code, status, cost, date_added,
-		        status_updated_at, created_at, updated_at
-		 FROM inventory_items
-		 WHERE inventory_id = $1
-		 ORDER BY created_at DESC`, inventoryID,
-	)
+	rows, err := r.pool.Query(ctx, "SELECT * FROM list_inventory_items($1)", inventoryID)
 	if err != nil {
 		return nil, fmt.Errorf("listing inventory items: %w", err)
 	}
@@ -297,26 +257,14 @@ func (r *InventoryRepositoryPGX) UpdateItem(
 		dateAdded = time.Now().Format("2006-01-02")
 	}
 
-	ct, err := r.pool.Exec(ctx,
-		`UPDATE inventory_items
-		 SET item_code = $1, status = $2, cost = $3, date_added = $4,
-		     status_updated_at = now(), updated_at = now()
-		 WHERE id = $5`,
-		item.ItemCode, item.Status, cost, dateAdded, item.ID,
-	)
-	if err != nil {
-		return fmt.Errorf("updating inventory item: %w", err)
-	}
-
-	if ct.RowsAffected() == 0 {
-		return domain.ErrInventoryItemNotFound
-	}
-
-	err = r.pool.QueryRow(ctx,
-		`SELECT status_updated_at, updated_at FROM inventory_items WHERE id = $1`, item.ID,
+	err := r.pool.QueryRow(ctx, "SELECT * FROM update_inventory_item($1, $2, $3, $4, $5)",
+		item.ID, item.ItemCode, item.Status, cost, dateAdded,
 	).Scan(&item.StatusUpdatedAt, &item.UpdatedAt)
 	if err != nil {
-		return fmt.Errorf("reading updated item timestamps: %w", err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.ErrInventoryItemNotFound
+		}
+		return fmt.Errorf("updating inventory item: %w", err)
 	}
 
 	return nil
@@ -326,12 +274,12 @@ func (r *InventoryRepositoryPGX) DeleteItem(
 	ctx context.Context,
 	id string,
 ) error {
-	ct, err := r.pool.Exec(ctx, `DELETE FROM inventory_items WHERE id = $1`, id)
+	var deleted bool
+	err := r.pool.QueryRow(ctx, "SELECT * FROM delete_inventory_item($1)", id).Scan(&deleted)
 	if err != nil {
 		return fmt.Errorf("deleting inventory item: %w", err)
 	}
-
-	if ct.RowsAffected() == 0 {
+	if !deleted {
 		return domain.ErrInventoryItemNotFound
 	}
 

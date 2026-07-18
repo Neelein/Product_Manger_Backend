@@ -61,6 +61,8 @@ func runMigration(ctx context.Context, pool *pgxpool.Pool) {
 		"../../../db/migrations/002_create_members.sql",
 		"../../../db/migrations/003_add_member_id_to_products.sql",
 		"../../../db/migrations/006_create_inventory.sql",
+		"../../../db/migrations/007_simplify_inventories.sql",
+		"../../../db/migrations/008_create_functions.sql",
 	} {
 		schema, err := os.ReadFile(file)
 		if err != nil {

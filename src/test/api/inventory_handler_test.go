@@ -85,8 +85,6 @@ func TestInventoryHandler_CreateInventory(t *testing.T) {
 			name: "valid inventory",
 			body: domain.CreateInventoryRequest{
 				ProductPriceID: price.ID,
-				Name:           "Test Inventory",
-				TotalQuantity:  100,
 				Status:         "銷售中",
 			},
 			wantStatus: http.StatusCreated,
@@ -120,7 +118,6 @@ func TestInventoryHandler_CreateInventory(t *testing.T) {
 				var resp domain.InventoryResponse
 				err := json.NewDecoder(w.Body).Decode(&resp)
 				assert.NoError(t, err)
-				assert.Equal(t, "Test Inventory", resp.Inventory.Name)
 				assert.NotEmpty(t, resp.Inventory.ID)
 			}
 		})
@@ -133,7 +130,6 @@ func TestInventoryHandler_CreateInventory_Unauthorized(t *testing.T) {
 
 	body, _ := json.Marshal(domain.CreateInventoryRequest{
 		ProductPriceID: "some-id",
-		Name:           "No Auth",
 	})
 
 	w := executeRequest(http.MethodPost, "/api/inventories", body, handler.CreateInventory)
@@ -147,10 +143,10 @@ func TestInventoryHandler_ListInventories(t *testing.T) {
 	price2 := createTestPriceForHandler(t, productRepo)
 
 	invRepo.CreateInventory(context.Background(), &domain.Inventory{
-		ProductPriceID: price1.ID, Name: "A",
+		ProductPriceID: price1.ID,
 	})
 	invRepo.CreateInventory(context.Background(), &domain.Inventory{
-		ProductPriceID: price2.ID, Name: "B",
+		ProductPriceID: price2.ID,
 	})
 
 	w := executeRequest(http.MethodGet, "/api/inventories", nil, handler.ListInventories)
@@ -182,7 +178,6 @@ func TestInventoryHandler_GetInventory(t *testing.T) {
 
 	created := domain.Inventory{
 		ProductPriceID: price.ID,
-		Name:           "Test",
 	}
 	invRepo.CreateInventory(context.Background(), &created)
 
@@ -219,7 +214,6 @@ func TestInventoryHandler_GetInventory(t *testing.T) {
 				err := json.NewDecoder(w.Body).Decode(&resp)
 				assert.NoError(t, err)
 				assert.Equal(t, created.ID, resp.Inventory.ID)
-				assert.Equal(t, "Test", resp.Inventory.Name)
 			}
 		})
 	}
@@ -233,8 +227,6 @@ func TestInventoryHandler_UpdateInventory(t *testing.T) {
 
 	created := domain.Inventory{
 		ProductPriceID: price.ID,
-		Name:           "Original",
-		TotalQuantity:  100,
 	}
 	invRepo.CreateInventory(context.Background(), &created)
 
@@ -243,24 +235,20 @@ func TestInventoryHandler_UpdateInventory(t *testing.T) {
 		id         string
 		body       any
 		wantStatus int
-		wantName   string
 	}{
 		{
-			name: "update existing inventory",
+			name: "update status only",
 			id:   created.ID,
 			body: domain.UpdateInventoryRequest{
-				Name:          "Updated",
-				TotalQuantity: 200,
-				Status:        "完售",
+				Status: "完售",
 			},
 			wantStatus: http.StatusOK,
-			wantName:   "Updated",
 		},
 		{
 			name: "update non-existent inventory",
 			id:   "00000000-0000-0000-0000-000000000000",
 			body: domain.UpdateInventoryRequest{
-				Name: "Ghost",
+				Status: "完售",
 			},
 			wantStatus: http.StatusNotFound,
 		},
@@ -299,7 +287,7 @@ func TestInventoryHandler_UpdateInventory(t *testing.T) {
 				var resp domain.InventoryResponse
 				err := json.NewDecoder(w.Body).Decode(&resp)
 				assert.NoError(t, err)
-				assert.Equal(t, tt.wantName, resp.Inventory.Name)
+				assert.Equal(t, "完售", resp.Inventory.Status)
 			}
 		})
 	}
@@ -310,7 +298,7 @@ func TestInventoryHandler_UpdateInventory_Unauthorized(t *testing.T) {
 	_, _, _, _, handler := setupInventoryTest(t)
 
 	body, _ := json.Marshal(domain.UpdateInventoryRequest{
-		Name: "No Auth",
+		Status: "完售",
 	})
 
 	w := executeRequestWithVars(
@@ -331,7 +319,6 @@ func TestInventoryHandler_DeleteInventory(t *testing.T) {
 
 	created := domain.Inventory{
 		ProductPriceID: price.ID,
-		Name:           "To Delete",
 	}
 	invRepo.CreateInventory(context.Background(), &created)
 
@@ -389,7 +376,6 @@ func TestInventoryHandler_CreateItem(t *testing.T) {
 
 	inventory := domain.Inventory{
 		ProductPriceID: price.ID,
-		Name:           "Test",
 	}
 	invRepo.CreateInventory(context.Background(), &inventory)
 
@@ -477,7 +463,6 @@ func TestInventoryHandler_ListItems(t *testing.T) {
 
 	inventory := domain.Inventory{
 		ProductPriceID: price.ID,
-		Name:           "Test",
 	}
 	invRepo.CreateInventory(context.Background(), &inventory)
 
@@ -510,7 +495,6 @@ func TestInventoryHandler_ListItems_Empty(t *testing.T) {
 
 	inventory := domain.Inventory{
 		ProductPriceID: price.ID,
-		Name:           "Empty",
 	}
 	invRepo.CreateInventory(context.Background(), &inventory)
 
@@ -536,7 +520,6 @@ func TestInventoryHandler_GetItem(t *testing.T) {
 
 	inventory := domain.Inventory{
 		ProductPriceID: price.ID,
-		Name:           "Test",
 	}
 	invRepo.CreateInventory(context.Background(), &inventory)
 
@@ -550,22 +533,22 @@ func TestInventoryHandler_GetItem(t *testing.T) {
 	invRepo.CreateItem(context.Background(), &created)
 
 	tests := []struct {
-		name       string
-		inventoryID string
-		itemID     string
-		wantStatus int
+		name         string
+		inventoryID  string
+		itemID       string
+		wantStatus   int
 	}{
 		{
-			name:       "existing item",
-			inventoryID: inventory.ID,
-			itemID:     created.ID,
-			wantStatus: http.StatusOK,
+			name:         "existing item",
+			inventoryID:  inventory.ID,
+			itemID:       created.ID,
+			wantStatus:   http.StatusOK,
 		},
 		{
-			name:       "non-existent item",
-			inventoryID: inventory.ID,
-			itemID:     "00000000-0000-0000-0000-000000000000",
-			wantStatus: http.StatusNotFound,
+			name:         "non-existent item",
+			inventoryID:  inventory.ID,
+			itemID:       "00000000-0000-0000-0000-000000000000",
+			wantStatus:   http.StatusNotFound,
 		},
 	}
 
@@ -599,7 +582,6 @@ func TestInventoryHandler_UpdateItem(t *testing.T) {
 
 	inventory := domain.Inventory{
 		ProductPriceID: price.ID,
-		Name:           "Test",
 	}
 	invRepo.CreateInventory(context.Background(), &inventory)
 
@@ -611,16 +593,16 @@ func TestInventoryHandler_UpdateItem(t *testing.T) {
 	invRepo.CreateItem(context.Background(), &created)
 
 	tests := []struct {
-		name       string
-		inventoryID string
-		itemID     string
-		body       any
-		wantStatus int
+		name         string
+		inventoryID  string
+		itemID       string
+		body         any
+		wantStatus   int
 	}{
 		{
-			name:       "update existing item",
+			name:        "update existing item",
 			inventoryID: inventory.ID,
-			itemID:     created.ID,
+			itemID:      created.ID,
 			body: domain.UpdateInventoryItemRequest{
 				ItemCode:  "NEW-CODE",
 				Status:    "出售",
@@ -630,20 +612,20 @@ func TestInventoryHandler_UpdateItem(t *testing.T) {
 			wantStatus: http.StatusOK,
 		},
 		{
-			name:       "non-existent item",
+			name:        "non-existent item",
 			inventoryID: inventory.ID,
-			itemID:     "00000000-0000-0000-0000-000000000000",
+			itemID:      "00000000-0000-0000-0000-000000000000",
 			body: domain.UpdateInventoryItemRequest{
 				ItemCode: "Ghost",
 			},
 			wantStatus: http.StatusNotFound,
 		},
 		{
-			name:       "invalid json",
+			name:        "invalid json",
 			inventoryID: inventory.ID,
-			itemID:     created.ID,
-			body:       "{invalid}",
-			wantStatus: http.StatusBadRequest,
+			itemID:      created.ID,
+			body:        "{invalid}",
+			wantStatus:  http.StatusBadRequest,
 		},
 	}
 
@@ -707,7 +689,6 @@ func TestInventoryHandler_DeleteItem(t *testing.T) {
 
 	inventory := domain.Inventory{
 		ProductPriceID: price.ID,
-		Name:           "Test",
 	}
 	invRepo.CreateInventory(context.Background(), &inventory)
 
@@ -718,22 +699,22 @@ func TestInventoryHandler_DeleteItem(t *testing.T) {
 	invRepo.CreateItem(context.Background(), &created)
 
 	tests := []struct {
-		name       string
-		inventoryID string
-		itemID     string
-		wantStatus int
+		name         string
+		inventoryID  string
+		itemID       string
+		wantStatus   int
 	}{
 		{
-			name:       "delete existing",
+			name:        "delete existing",
 			inventoryID: inventory.ID,
-			itemID:     created.ID,
-			wantStatus: http.StatusOK,
+			itemID:      created.ID,
+			wantStatus:  http.StatusOK,
 		},
 		{
-			name:       "delete non-existent",
+			name:        "delete non-existent",
 			inventoryID: inventory.ID,
-			itemID:     created.ID,
-			wantStatus: http.StatusNotFound,
+			itemID:      created.ID,
+			wantStatus:  http.StatusNotFound,
 		},
 	}
 

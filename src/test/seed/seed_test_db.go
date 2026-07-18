@@ -63,12 +63,10 @@ func main() {
 	// ── 庫存：VIP 區 ──
 	invVIP := domain.Inventory{
 		ProductPriceID: priceVIP.ID,
-		Name:           "周杰倫演唱會 VIP 區",
-		TotalQuantity:  100,
 		Status:         "銷售中",
 	}
 	must(invRepo.CreateInventory(ctx, &invVIP))
-	fmt.Printf("✅ 庫存總表 (VIP) — ID: %s, 總量: %d\n", invVIP.ID, invVIP.TotalQuantity)
+	fmt.Printf("✅ 庫存總表 (VIP) — ID: %s\n", invVIP.ID)
 
 	for i := 1; i <= 8; i++ {
 		item := domain.InventoryItem{
@@ -80,7 +78,6 @@ func main() {
 		}
 		must(invRepo.CreateItem(ctx, &item))
 	}
-	// 賣出 2 張 VIP
 	for i := 9; i <= 10; i++ {
 		item := domain.InventoryItem{
 			InventoryID: invVIP.ID,
@@ -90,18 +87,12 @@ func main() {
 			DateAdded:   "2026-07-01",
 		}
 		must(invRepo.CreateItem(ctx, &item))
-		invVIP.SoldQuantity++
 	}
-	invVIP.TotalQuantity = 10
-	invVIP.SoldQuantity = 2
-	must(invRepo.UpdateInventory(ctx, &invVIP))
 	fmt.Printf("✅ 庫存明細 (VIP) — 10 筆 (可用 8, 出售 2)\n")
 
 	// ── 庫存：一般區 ──
 	invStd := domain.Inventory{
 		ProductPriceID: priceStd.ID,
-		Name:           "周杰倫演唱會一般區",
-		TotalQuantity:  5,
 		Status:         "完售",
 	}
 	must(invRepo.CreateInventory(ctx, &invStd))
@@ -116,8 +107,6 @@ func main() {
 		}
 		must(invRepo.CreateItem(ctx, &item))
 	}
-	invStd.SoldQuantity = 5
-	must(invRepo.UpdateInventory(ctx, &invStd))
 	fmt.Printf("✅ 庫存明細 (一般區) — 5 筆 (全部售出)\n")
 
 	// ── Product B: 電子書 ──
@@ -155,31 +144,29 @@ func main() {
 	// ── 庫存：標準版 ──
 	invEbook := domain.Inventory{
 		ProductPriceID: priceEbook.ID,
-		Name:           "Go 語言實戰手冊 標準版",
-		TotalQuantity:  20,
 		Status:         "銷售中",
 	}
 	must(invRepo.CreateInventory(ctx, &invEbook))
 	fmt.Printf("✅ 庫存總表 (標準版) — ID: %s\n", invEbook.ID)
 
-	// 註銷 1 張
-	for i := 1; i <= 5; i++ {
-		status := "可用"
-		if i == 5 {
-			status = "註銷"
-		}
+	for i := 1; i <= 4; i++ {
 		item := domain.InventoryItem{
 			InventoryID: invEbook.ID,
 			ItemCode:    fmt.Sprintf("EB-STD-%04d", i),
-			Status:      status,
+			Status:      "可用",
 			Cost:        200.00,
 			DateAdded:   "2026-07-10",
 		}
 		must(invRepo.CreateItem(ctx, &item))
-		if status == "出售" {
-			invEbook.SoldQuantity++
-		}
 	}
+	// 註銷 1 張
+	must(invRepo.CreateItem(ctx, &domain.InventoryItem{
+		InventoryID: invEbook.ID,
+		ItemCode:    "EB-STD-0005",
+		Status:      "註銷",
+		Cost:        200.00,
+		DateAdded:   "2026-07-10",
+	}))
 	// 賣出 2 張
 	for i := 6; i <= 7; i++ {
 		item := domain.InventoryItem{
@@ -190,18 +177,12 @@ func main() {
 			DateAdded:   "2026-07-10",
 		}
 		must(invRepo.CreateItem(ctx, &item))
-		invEbook.SoldQuantity++
 	}
-	invEbook.TotalQuantity = 7
-	invEbook.SoldQuantity = 2
-	must(invRepo.UpdateInventory(ctx, &invEbook))
 	fmt.Printf("✅ 庫存明細 (標準版) — 7 筆 (可用 4, 出售 2, 註銷 1)\n")
 
 	// ── 庫存：含原始碼套裝（無庫存項目）──
 	invBundle := domain.Inventory{
 		ProductPriceID: priceBundle.ID,
-		Name:           "Go 語言實戰手冊 含原始碼套裝",
-		TotalQuantity:  0,
 		Status:         "註銷",
 	}
 	must(invRepo.CreateInventory(ctx, &invBundle))
@@ -214,23 +195,29 @@ func main() {
 
 func showProducts(ctx context.Context, pool *pgxpool.Pool) {
 	rows, _ := pool.Query(ctx, `
-		SELECT p.name, pr.label, pr.amount, i.name, i.status, i.total_quantity, i.sold_quantity
+		SELECT p.name, pr.label, pr.amount,
+		       CONCAT(p.name, '-', pr.label) AS inventory_name,
+		       i.status,
+		       COUNT(it.id) AS total_quantity,
+		       COUNT(it.id) FILTER (WHERE it.status = '出售') AS sold_quantity
 		FROM products p
 		JOIN product_details pd ON pd.product_id = p.id
 		JOIN product_prices pr ON pr.product_detail_id = pd.id
 		LEFT JOIN inventories i ON i.product_price_id = pr.id
+		LEFT JOIN inventory_items it ON it.inventory_id = i.id
+		GROUP BY p.name, pr.label, pr.amount, i.status, i.id
 		ORDER BY p.name, pr.sort_order
 	`)
 	defer rows.Close()
 
 	fmt.Println()
 	for rows.Next() {
-		var pName, prLabel, iName, iStatus string
+		var pName, prLabel, invName, iStatus string
 		var amount float64
 		var totalQty, soldQty int
-		rows.Scan(&pName, &prLabel, &amount, &iName, &iStatus, &totalQty, &soldQty)
-		fmt.Printf("  📦 %s | %s $%.0f → %s [%s] %d/%d\n",
-			pName, prLabel, amount, iName, iStatus, soldQty, totalQty)
+		rows.Scan(&pName, &prLabel, &amount, &invName, &iStatus, &totalQty, &soldQty)
+		fmt.Printf("  📦 %s -> %s | %s $%.0f [%s] %d/%d\n",
+			pName, prLabel, invName, amount, iStatus, soldQty, totalQty)
 	}
 }
 
