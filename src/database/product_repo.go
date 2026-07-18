@@ -38,11 +38,8 @@ func (r *ProductRepositoryPGX) Create(
 		status = "active"
 	}
 
-	err := r.pool.QueryRow(ctx,
-		`INSERT INTO products (type, name, status, category, member_id)
-		 VALUES ($1, $2, $3, $4, $5)
-		 RETURNING id, created_at, updated_at`,
-		"product", product.Name, status, category, memberID,
+	err := r.pool.QueryRow(ctx, "SELECT * FROM create_product($1, $2, $3, $4)",
+		product.Name, status, category, memberID,
 	).Scan(&product.ID, &product.CreatedAt, &product.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("creating product: %w", err)
@@ -54,10 +51,7 @@ func (r *ProductRepositoryPGX) Create(
 func (r *ProductRepositoryPGX) List(
 	ctx context.Context,
 ) ([]domain.Product, error) {
-	rows, err := r.pool.Query(ctx,
-		`SELECT id, name, status, category, created_at, updated_at
-		 FROM products
-		 ORDER BY created_at DESC`)
+	rows, err := r.pool.Query(ctx, "SELECT * FROM list_products()")
 	if err != nil {
 		return nil, fmt.Errorf("listing products: %w", err)
 	}
@@ -105,9 +99,7 @@ func (r *ProductRepositoryPGX) GetByID(
 		cat *string
 	)
 
-	err := r.pool.QueryRow(ctx,
-		`SELECT id, name, status, category, created_at, updated_at
-		 FROM products WHERE id = $1`, id,
+	err := r.pool.QueryRow(ctx, "SELECT * FROM get_product_by_id($1)", id,
 	).Scan(&p.ID, &p.Name, &p.Status, &cat, &p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -137,25 +129,14 @@ func (r *ProductRepositoryPGX) Update(
 		status = "active"
 	}
 
-	ct, err := r.pool.Exec(ctx,
-		`UPDATE products
-		 SET name = $1, status = $2, category = $3, updated_at = now()
-		 WHERE id = $4`,
-		product.Name, status, category, product.ID,
-	)
-	if err != nil {
-		return fmt.Errorf("updating product: %w", err)
-	}
-
-	if ct.RowsAffected() == 0 {
-		return domain.ErrProductNotFound
-	}
-
-	err = r.pool.QueryRow(ctx,
-		`SELECT updated_at FROM products WHERE id = $1`, product.ID,
+	err := r.pool.QueryRow(ctx, "SELECT * FROM update_product($1, $2, $3, $4)",
+		product.ID, product.Name, status, category,
 	).Scan(&product.UpdatedAt)
 	if err != nil {
-		return fmt.Errorf("reading updated timestamp: %w", err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.ErrProductNotFound
+		}
+		return fmt.Errorf("updating product: %w", err)
 	}
 
 	return nil
@@ -165,12 +146,12 @@ func (r *ProductRepositoryPGX) Delete(
 	ctx context.Context,
 	id string,
 ) error {
-	ct, err := r.pool.Exec(ctx, `DELETE FROM products WHERE id = $1`, id)
+	var deleted bool
+	err := r.pool.QueryRow(ctx, "SELECT * FROM delete_product($1)", id).Scan(&deleted)
 	if err != nil {
 		return fmt.Errorf("deleting product: %w", err)
 	}
-
-	if ct.RowsAffected() == 0 {
+	if !deleted {
 		return domain.ErrProductNotFound
 	}
 
@@ -192,10 +173,7 @@ func (r *ProductRepositoryPGX) CreateDetail(
 		returnPolicy = &detail.ReturnPolicy
 	}
 
-	err := r.pool.QueryRow(ctx,
-		`INSERT INTO product_details (product_id, introduction, usage_instructions, return_policy)
-		 VALUES ($1, $2, $3, $4)
-		 RETURNING id, created_at, updated_at`,
+	err := r.pool.QueryRow(ctx, "SELECT * FROM create_product_detail($1, $2, $3, $4)",
 		detail.ProductID, introduction, usageInstructions, returnPolicy,
 	).Scan(&detail.ID, &detail.CreatedAt, &detail.UpdatedAt)
 	if err != nil {
@@ -214,10 +192,7 @@ func (r *ProductRepositoryPGX) GetDetailByProductID(
 		introduction, usage, returnPolicy *string
 	)
 
-	err := r.pool.QueryRow(ctx,
-		`SELECT id, product_id, introduction, usage_instructions, return_policy,
-		        created_at, updated_at
-		 FROM product_details WHERE product_id = $1`, productID,
+	err := r.pool.QueryRow(ctx, "SELECT * FROM get_product_detail_by_product($1)", productID,
 	).Scan(&d.ID, &d.ProductID, &introduction, &usage,
 		&returnPolicy, &d.CreatedAt, &d.UpdatedAt)
 	if err != nil {
@@ -255,25 +230,14 @@ func (r *ProductRepositoryPGX) UpdateDetail(
 		returnPolicy = &detail.ReturnPolicy
 	}
 
-	ct, err := r.pool.Exec(ctx,
-		`UPDATE product_details
-		 SET introduction = $1, usage_instructions = $2, return_policy = $3, updated_at = now()
-		 WHERE id = $4`,
-		introduction, usageInstructions, returnPolicy, detail.ID,
-	)
-	if err != nil {
-		return fmt.Errorf("updating detail: %w", err)
-	}
-
-	if ct.RowsAffected() == 0 {
-		return domain.ErrDetailNotFound
-	}
-
-	err = r.pool.QueryRow(ctx,
-		`SELECT updated_at FROM product_details WHERE id = $1`, detail.ID,
+	err := r.pool.QueryRow(ctx, "SELECT * FROM update_product_detail($1, $2, $3, $4)",
+		detail.ID, introduction, usageInstructions, returnPolicy,
 	).Scan(&detail.UpdatedAt)
 	if err != nil {
-		return fmt.Errorf("reading updated detail timestamp: %w", err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.ErrDetailNotFound
+		}
+		return fmt.Errorf("updating detail: %w", err)
 	}
 
 	return nil
@@ -285,10 +249,7 @@ func (r *ProductRepositoryPGX) GetPriceByID(
 ) (*domain.ProductPrice, error) {
 	var p domain.ProductPrice
 
-	err := r.pool.QueryRow(ctx,
-		`SELECT id, product_detail_id, label, amount, currency, sort_order,
-		        created_at, updated_at
-		 FROM product_prices WHERE id = $1`, id,
+	err := r.pool.QueryRow(ctx, "SELECT * FROM get_product_price_by_id($1)", id,
 	).Scan(&p.ID, &p.ProductDetailID, &p.Label, &p.Amount, &p.Currency,
 		&p.SortOrder, &p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
@@ -305,13 +266,7 @@ func (r *ProductRepositoryPGX) GetPricesByDetailID(
 	ctx context.Context,
 	detailID string,
 ) ([]domain.ProductPrice, error) {
-	rows, err := r.pool.Query(ctx,
-		`SELECT id, product_detail_id, label, amount, currency, sort_order,
-		        created_at, updated_at
-		 FROM product_prices
-		 WHERE product_detail_id = $1
-		 ORDER BY sort_order`, detailID,
-	)
+	rows, err := r.pool.Query(ctx, "SELECT * FROM list_product_prices_by_detail($1)", detailID)
 	if err != nil {
 		return nil, fmt.Errorf("listing prices by detail ID: %w", err)
 	}
@@ -350,25 +305,14 @@ func (r *ProductRepositoryPGX) UpdatePrice(
 		currency = &price.Currency
 	}
 
-	ct, err := r.pool.Exec(ctx,
-		`UPDATE product_prices
-		 SET label = $1, amount = $2, currency = $3, sort_order = $4, updated_at = now()
-		 WHERE id = $5`,
-		price.Label, price.Amount, currency, price.SortOrder, price.ID,
-	)
-	if err != nil {
-		return fmt.Errorf("updating price: %w", err)
-	}
-
-	if ct.RowsAffected() == 0 {
-		return domain.ErrPriceNotFound
-	}
-
-	err = r.pool.QueryRow(ctx,
-		`SELECT updated_at FROM product_prices WHERE id = $1`, price.ID,
+	err := r.pool.QueryRow(ctx, "SELECT * FROM update_product_price($1, $2, $3, $4, $5)",
+		price.ID, price.Label, price.Amount, currency, price.SortOrder,
 	).Scan(&price.UpdatedAt)
 	if err != nil {
-		return fmt.Errorf("reading updated price timestamp: %w", err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.ErrPriceNotFound
+		}
+		return fmt.Errorf("updating price: %w", err)
 	}
 
 	return nil
@@ -385,10 +329,7 @@ func (r *ProductRepositoryPGX) CreatePrice(
 		currency = &price.Currency
 	}
 
-	err := r.pool.QueryRow(ctx,
-		`INSERT INTO product_prices (product_detail_id, label, amount, currency, sort_order)
-		 VALUES ($1, $2, $3, COALESCE($4, 'TWD'), $5)
-		 RETURNING id, created_at, updated_at`,
+	err := r.pool.QueryRow(ctx, "SELECT * FROM create_product_price($1, $2, $3, $4, $5)",
 		price.ProductDetailID, price.Label, price.Amount, currency, price.SortOrder,
 	).Scan(&price.ID, &price.CreatedAt, &price.UpdatedAt)
 	if err != nil {

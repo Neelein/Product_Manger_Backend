@@ -24,6 +24,20 @@ type MemberRepository interface {
 	Update(ctx context.Context, member *Member) error
 }
 
+type InventoryRepository interface {
+	CreateInventory(ctx context.Context, inventory *Inventory) error
+	GetInventoryByID(ctx context.Context, id string) (*Inventory, error)
+	GetInventoryByPriceID(ctx context.Context, priceID string) (*Inventory, error)
+	ListInventories(ctx context.Context) ([]Inventory, error)
+	UpdateInventory(ctx context.Context, inventory *Inventory) error
+	DeleteInventory(ctx context.Context, id string) error
+	CreateItem(ctx context.Context, item *InventoryItem) error
+	GetItemByID(ctx context.Context, id string) (*InventoryItem, error)
+	ListItemsByInventoryID(ctx context.Context, inventoryID string) ([]InventoryItem, error)
+	UpdateItem(ctx context.Context, item *InventoryItem) error
+	DeleteItem(ctx context.Context, id string) error
+}
+
 type SessionRepository interface {
 	Create(ctx context.Context, session *Session) error
 	GetByKey(ctx context.Context, sessionKey string) (*Session, error)

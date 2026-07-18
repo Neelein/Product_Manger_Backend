@@ -26,6 +26,22 @@ func RegisterProductRoutes(r *mux.Router, repo domain.ProductRepository, memberR
 	r.Handle("/api/products/{id}/details/{did}/prices", auth(http.HandlerFunc(h.CreatePrice))).Methods("POST")
 }
 
+func RegisterInventoryRoutes(r *mux.Router, repo domain.InventoryRepository, memberRepo domain.MemberRepository, sessionRepo domain.SessionRepository) {
+	h := NewInventoryHandler(repo)
+	auth := AuthMiddleware(sessionRepo, memberRepo)
+
+	r.HandleFunc("/api/inventories", h.ListInventories).Methods("GET")
+	r.Handle("/api/inventories", auth(http.HandlerFunc(h.CreateInventory))).Methods("POST")
+	r.HandleFunc("/api/inventories/{id}", h.GetInventory).Methods("GET")
+	r.Handle("/api/inventories/{id}/update", auth(http.HandlerFunc(h.UpdateInventory))).Methods("POST")
+	r.Handle("/api/inventories/{id}/delete", auth(http.HandlerFunc(h.DeleteInventory))).Methods("POST")
+	r.HandleFunc("/api/inventories/{id}/items", h.ListItems).Methods("GET")
+	r.Handle("/api/inventories/{id}/items", auth(http.HandlerFunc(h.CreateItem))).Methods("POST")
+	r.HandleFunc("/api/inventories/{id}/items/{iid}", h.GetItem).Methods("GET")
+	r.Handle("/api/inventories/{id}/items/{iid}/update", auth(http.HandlerFunc(h.UpdateItem))).Methods("POST")
+	r.Handle("/api/inventories/{id}/items/{iid}/delete", auth(http.HandlerFunc(h.DeleteItem))).Methods("POST")
+}
+
 func RegisterMemberRoutes(r *mux.Router, memberRepo domain.MemberRepository, sessionRepo domain.SessionRepository) {
 	h := NewMemberHandler(memberRepo, sessionRepo)
 	auth := AuthMiddleware(sessionRepo, memberRepo)

@@ -21,10 +21,7 @@ func NewMemberRepositoryPGX(pool *pgxpool.Pool) *MemberRepositoryPGX {
 }
 
 func (r *MemberRepositoryPGX) Create(ctx context.Context, member *domain.Member) error {
-	err := r.pool.QueryRow(ctx,
-		`INSERT INTO members (email, password, name)
-		 VALUES ($1, $2, $3)
-		 RETURNING id, created_at, updated_at`,
+	err := r.pool.QueryRow(ctx, "SELECT * FROM create_member($1, $2, $3)",
 		member.Email, member.Password, member.Name,
 	).Scan(&member.ID, &member.CreatedAt, &member.UpdatedAt)
 	if err != nil {
@@ -39,9 +36,7 @@ func (r *MemberRepositoryPGX) Create(ctx context.Context, member *domain.Member)
 
 func (r *MemberRepositoryPGX) GetByEmail(ctx context.Context, email string) (*domain.Member, error) {
 	var m domain.Member
-	err := r.pool.QueryRow(ctx,
-		`SELECT id, email, password, name, created_at, updated_at
-		 FROM members WHERE email = $1`, email,
+	err := r.pool.QueryRow(ctx, "SELECT * FROM get_member_by_email($1)", email,
 	).Scan(&m.ID, &m.Email, &m.Password, &m.Name, &m.CreatedAt, &m.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -54,9 +49,7 @@ func (r *MemberRepositoryPGX) GetByEmail(ctx context.Context, email string) (*do
 
 func (r *MemberRepositoryPGX) GetByID(ctx context.Context, id string) (*domain.Member, error) {
 	var m domain.Member
-	err := r.pool.QueryRow(ctx,
-		`SELECT id, email, password, name, created_at, updated_at
-		 FROM members WHERE id = $1`, id,
+	err := r.pool.QueryRow(ctx, "SELECT * FROM get_member_by_id($1)", id,
 	).Scan(&m.ID, &m.Email, &m.Password, &m.Name, &m.CreatedAt, &m.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -68,30 +61,18 @@ func (r *MemberRepositoryPGX) GetByID(ctx context.Context, id string) (*domain.M
 }
 
 func (r *MemberRepositoryPGX) Update(ctx context.Context, member *domain.Member) error {
-	ct, err := r.pool.Exec(ctx,
-		`UPDATE members
-		 SET email = $1, name = $2, updated_at = now()
-		 WHERE id = $3`,
-		member.Email, member.Name, member.ID,
-	)
+	err := r.pool.QueryRow(ctx, "SELECT * FROM update_member($1, $2, $3)",
+		member.ID, member.Email, member.Name,
+	).Scan(&member.UpdatedAt)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.ErrMemberNotFound
+		}
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return domain.ErrEmailAlreadyExists
 		}
 		return fmt.Errorf("updating member: %w", err)
 	}
-
-	if ct.RowsAffected() == 0 {
-		return domain.ErrMemberNotFound
-	}
-
-	err = r.pool.QueryRow(ctx,
-		`SELECT updated_at FROM members WHERE id = $1`, member.ID,
-	).Scan(&member.UpdatedAt)
-	if err != nil {
-		return fmt.Errorf("reading updated timestamp: %w", err)
-	}
-
 	return nil
 }

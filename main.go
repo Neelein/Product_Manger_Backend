@@ -25,6 +25,7 @@ func main() {
 	}
 	defer pool.Close()
 	repo := database.NewProductRepositoryPGX(pool)
+	inventoryRepo := database.NewInventoryRepositoryPGX(pool)
 	memberRepo := database.NewMemberRepositoryPGX(pool)
 	sessionRepo := database.NewSessionCache(24 * time.Hour)
 	defer sessionRepo.Stop()
@@ -35,6 +36,7 @@ func main() {
 	r.HandleFunc("/api/health", healthHandler).Methods("GET")
 
 	api.RegisterProductRoutes(r, repo, memberRepo, sessionRepo)
+	api.RegisterInventoryRoutes(r, inventoryRepo, memberRepo, sessionRepo)
 	api.RegisterMemberRoutes(r, memberRepo, sessionRepo)
 
 	log.Println("Server starting on :8080")
