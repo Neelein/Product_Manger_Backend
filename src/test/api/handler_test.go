@@ -50,7 +50,7 @@ func TestMain(m *testing.M) {
 }
 
 func dropTables(ctx context.Context, pool *pgxpool.Pool) {
-	for _, table := range []string{"members", "product_prices", "product_details", "products"} {
+	for _, table := range []string{"inventory_items", "inventories", "members", "product_prices", "product_details", "products"} {
 		_, _ = pool.Exec(ctx, "DROP TABLE IF EXISTS "+table+" CASCADE")
 	}
 }
@@ -60,6 +60,7 @@ func runMigration(ctx context.Context, pool *pgxpool.Pool) {
 		"../../../db/migrations/001_create_products.sql",
 		"../../../db/migrations/002_create_members.sql",
 		"../../../db/migrations/003_add_member_id_to_products.sql",
+		"../../../db/migrations/006_create_inventory.sql",
 	} {
 		schema, err := os.ReadFile(file)
 		if err != nil {
