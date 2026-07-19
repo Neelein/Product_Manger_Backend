@@ -52,3 +52,16 @@ func RegisterMemberRoutes(r *mux.Router, memberRepo domain.MemberRepository, ses
 	r.Handle("/api/members/me", auth(http.HandlerFunc(h.GetCurrentMember))).Methods("GET")
 	r.Handle("/api/members/update", auth(http.HandlerFunc(h.UpdateMember))).Methods("POST")
 }
+
+func RegisterAnnouncementRoutes(r *mux.Router, repo domain.AnnouncementRepository, memberRepo domain.MemberRepository, sessionRepo domain.SessionRepository) {
+	h := NewAnnouncementHandler(repo)
+	auth := AuthMiddleware(sessionRepo, memberRepo)
+
+	r.HandleFunc("/api/announcements", h.ListAnnouncements).Methods("GET")
+	r.Handle("/api/announcements", auth(http.HandlerFunc(h.CreateAnnouncement))).Methods("POST")
+	r.HandleFunc("/api/announcements/{announcementId}", h.GetAnnouncement).Methods("GET")
+	r.Handle("/api/announcements/{announcementId}/update", auth(http.HandlerFunc(h.UpdateAnnouncement))).Methods("POST")
+	r.Handle("/api/announcements/{announcementId}/delete", auth(http.HandlerFunc(h.DeleteAnnouncement))).Methods("POST")
+
+	r.PathPrefix("/media/images/announcements/").Handler(http.StripPrefix("/media/images/announcements/", http.FileServer(http.Dir("/Users/neal/Desktop/Project/Product_Manger/media/images/announcements"))))
+}

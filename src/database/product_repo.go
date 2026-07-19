@@ -23,23 +23,18 @@ func (r *ProductRepositoryPGX) Create(
 	ctx context.Context,
 	product *domain.Product,
 ) error {
-	var category *string
-	if product.Category != "" {
-		category = &product.Category
-	}
-
-	var memberID *string
-	if product.CreatedBy != "" {
-		memberID = &product.CreatedBy
-	}
-
 	status := product.Status
 	if status == "" {
 		status = "active"
 	}
 
+	memberID := product.CreatedBy
+	if memberID == "" {
+		memberID = "00000000-0000-0000-0000-000000000000"
+	}
+
 	err := r.pool.QueryRow(ctx, "SELECT * FROM create_product($1, $2, $3, $4)",
-		product.Name, status, category, memberID,
+		product.Name, status, product.Category, memberID,
 	).Scan(&product.ID, &product.CreatedAt, &product.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("creating product: %w", err)
@@ -55,32 +50,22 @@ func (r *ProductRepositoryPGX) List(
 	if err != nil {
 		return nil, fmt.Errorf("listing products: %w", err)
 	}
-	defer rows.Close()
 
-	var products []domain.Product
-	for rows.Next() {
-		var (
-			p   domain.Product
-			cat *string
-		)
+	products, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.Product, error) {
+		var p domain.Product
 
-		err := rows.Scan(
-			&p.ID, &p.Name, &p.Status, &cat,
+		err := row.Scan(
+			&p.ID, &p.Name, &p.Status, &p.Category,
 			&p.CreatedAt, &p.UpdatedAt,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("scanning product row: %w", err)
+			return p, err
 		}
 
-		if cat != nil {
-			p.Category = *cat
-		}
-
-		products = append(products, p)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterating product rows: %w", err)
+		return p, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("listing products: %w", err)
 	}
 
 	if products == nil {
@@ -94,22 +79,15 @@ func (r *ProductRepositoryPGX) GetByID(
 	ctx context.Context,
 	id string,
 ) (*domain.Product, error) {
-	var (
-		p   domain.Product
-		cat *string
-	)
+	var p domain.Product
 
 	err := r.pool.QueryRow(ctx, "SELECT * FROM get_product_by_id($1)", id,
-	).Scan(&p.ID, &p.Name, &p.Status, &cat, &p.CreatedAt, &p.UpdatedAt)
+	).Scan(&p.ID, &p.Name, &p.Status, &p.Category, &p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrProductNotFound
 		}
 		return nil, fmt.Errorf("getting product by ID: %w", err)
-	}
-
-	if cat != nil {
-		p.Category = *cat
 	}
 
 	return &p, nil
@@ -119,18 +97,13 @@ func (r *ProductRepositoryPGX) Update(
 	ctx context.Context,
 	product *domain.Product,
 ) error {
-	var category *string
-	if product.Category != "" {
-		category = &product.Category
-	}
-
 	status := product.Status
 	if status == "" {
 		status = "active"
 	}
 
 	err := r.pool.QueryRow(ctx, "SELECT * FROM update_product($1, $2, $3, $4)",
-		product.ID, product.Name, status, category,
+		product.ID, product.Name, status, product.Category,
 	).Scan(&product.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -162,19 +135,8 @@ func (r *ProductRepositoryPGX) CreateDetail(
 	ctx context.Context,
 	detail *domain.ProductDetail,
 ) error {
-	var introduction, usageInstructions, returnPolicy *string
-	if detail.Introduction != "" {
-		introduction = &detail.Introduction
-	}
-	if detail.UsageInstructions != "" {
-		usageInstructions = &detail.UsageInstructions
-	}
-	if detail.ReturnPolicy != "" {
-		returnPolicy = &detail.ReturnPolicy
-	}
-
 	err := r.pool.QueryRow(ctx, "SELECT * FROM create_product_detail($1, $2, $3, $4)",
-		detail.ProductID, introduction, usageInstructions, returnPolicy,
+		detail.ProductID, detail.Introduction, detail.UsageInstructions, detail.ReturnPolicy,
 	).Scan(&detail.ID, &detail.CreatedAt, &detail.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("creating detail: %w", err)
@@ -187,29 +149,16 @@ func (r *ProductRepositoryPGX) GetDetailByProductID(
 	ctx context.Context,
 	productID string,
 ) (*domain.ProductDetail, error) {
-	var (
-		d                                 domain.ProductDetail
-		introduction, usage, returnPolicy *string
-	)
+	var d domain.ProductDetail
 
 	err := r.pool.QueryRow(ctx, "SELECT * FROM get_product_detail_by_product($1)", productID,
-	).Scan(&d.ID, &d.ProductID, &introduction, &usage,
-		&returnPolicy, &d.CreatedAt, &d.UpdatedAt)
+	).Scan(&d.ID, &d.ProductID, &d.Introduction, &d.UsageInstructions,
+		&d.ReturnPolicy, &d.CreatedAt, &d.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrDetailNotFound
 		}
 		return nil, fmt.Errorf("getting detail by product ID: %w", err)
-	}
-
-	if introduction != nil {
-		d.Introduction = *introduction
-	}
-	if usage != nil {
-		d.UsageInstructions = *usage
-	}
-	if returnPolicy != nil {
-		d.ReturnPolicy = *returnPolicy
 	}
 
 	return &d, nil
@@ -219,19 +168,8 @@ func (r *ProductRepositoryPGX) UpdateDetail(
 	ctx context.Context,
 	detail *domain.ProductDetail,
 ) error {
-	var introduction, usageInstructions, returnPolicy *string
-	if detail.Introduction != "" {
-		introduction = &detail.Introduction
-	}
-	if detail.UsageInstructions != "" {
-		usageInstructions = &detail.UsageInstructions
-	}
-	if detail.ReturnPolicy != "" {
-		returnPolicy = &detail.ReturnPolicy
-	}
-
 	err := r.pool.QueryRow(ctx, "SELECT * FROM update_product_detail($1, $2, $3, $4)",
-		detail.ID, introduction, usageInstructions, returnPolicy,
+		detail.ID, detail.Introduction, detail.UsageInstructions, detail.ReturnPolicy,
 	).Scan(&detail.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -270,21 +208,15 @@ func (r *ProductRepositoryPGX) GetPricesByDetailID(
 	if err != nil {
 		return nil, fmt.Errorf("listing prices by detail ID: %w", err)
 	}
-	defer rows.Close()
 
-	var prices []domain.ProductPrice
-	for rows.Next() {
+	prices, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.ProductPrice, error) {
 		var p domain.ProductPrice
-		err := rows.Scan(&p.ID, &p.ProductDetailID, &p.Label, &p.Amount,
+		err := row.Scan(&p.ID, &p.ProductDetailID, &p.Label, &p.Amount,
 			&p.Currency, &p.SortOrder, &p.InventoryID, &p.CreatedAt, &p.UpdatedAt)
-		if err != nil {
-			return nil, fmt.Errorf("scanning price row: %w", err)
-		}
-		prices = append(prices, p)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterating price rows: %w", err)
+		return p, err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("listing prices by detail ID: %w", err)
 	}
 
 	if prices == nil {

@@ -16,7 +16,7 @@ import (
 
 func cleanupMembers(t *testing.T) {
 	t.Helper()
-	_, err := testPool.Exec(context.Background(), "TRUNCATE TABLE members CASCADE")
+	_, err := testPool.Exec(context.Background(), "DELETE FROM members WHERE id != '00000000-0000-0000-0000-000000000000'")
 	require.NoError(t, err)
 }
 
@@ -117,7 +117,7 @@ func TestMemberRepositoryPGX_Update(t *testing.T) {
 
 	t.Run("update non-existent member", func(t *testing.T) {
 		m := domain.Member{
-			ID:    "00000000-0000-0000-0000-000000000000",
+			ID:    "ffffffff-ffff-ffff-ffff-ffffffffffff",
 			Email: "nobody@example.com",
 			Name:  "Nobody",
 		}
@@ -154,7 +154,7 @@ func TestMemberRepositoryPGX_GetByID(t *testing.T) {
 	})
 
 	t.Run("non-existent ID", func(t *testing.T) {
-		got, err := repo.GetByID(context.Background(), "00000000-0000-0000-0000-000000000000")
+		got, err := repo.GetByID(context.Background(), "ffffffff-ffff-ffff-ffff-ffffffffffff")
 		assert.NoError(t, err)
 		assert.Nil(t, got)
 	})

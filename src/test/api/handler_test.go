@@ -50,9 +50,10 @@ func TestMain(m *testing.M) {
 }
 
 func dropTables(ctx context.Context, pool *pgxpool.Pool) {
-	for _, table := range []string{"inventory_items", "inventories", "members", "product_prices", "product_details", "products"} {
+	for _, table := range []string{"announcements", "inventory_items", "inventories", "members", "product_prices", "product_details", "products"} {
 		_, _ = pool.Exec(ctx, "DROP TABLE IF EXISTS "+table+" CASCADE")
 	}
+	_, _ = pool.Exec(ctx, "DROP FUNCTION IF EXISTS create_member, get_member_by_email, get_member_by_id, update_member, create_product, list_products, get_product_by_id, update_product, delete_product, create_product_detail, get_product_detail_by_product, update_product_detail, create_product_price, get_product_price_by_id, list_product_prices_by_detail, update_product_price, create_inventory, get_inventory_by_id, get_inventory_by_price_id, list_inventories, update_inventory, delete_inventory, create_inventory_item, get_inventory_item_by_id, list_inventory_items, update_inventory_item, delete_inventory_item, create_announcement, get_announcement_by_id, list_announcements, count_announcements, update_announcement, delete_announcement CASCADE")
 }
 
 func runMigration(ctx context.Context, pool *pgxpool.Pool) {
@@ -64,6 +65,8 @@ func runMigration(ctx context.Context, pool *pgxpool.Pool) {
 		"../../../db/migrations/007_simplify_inventories.sql",
 		"../../../db/migrations/008_create_functions.sql",
 		"../../../db/migrations/009_add_inventory_id_to_price_functions.sql",
+		"../../../db/migrations/010_create_announcements.sql",
+		"../../../db/migrations/011_set_not_null.sql",
 	} {
 		schema, err := os.ReadFile(file)
 		if err != nil {
@@ -86,7 +89,7 @@ func setupTestHandler() (*database.ProductRepositoryPGX, *database.MemberReposit
 
 func cleanupProducts(t *testing.T) {
 	t.Helper()
-	_, err := testPool.Exec(context.Background(), "TRUNCATE TABLE products, members CASCADE")
+	_, err := testPool.Exec(context.Background(), "TRUNCATE TABLE products CASCADE")
 	require.NoError(t, err)
 }
 
