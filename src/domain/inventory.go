@@ -3,14 +3,16 @@ package domain
 import "time"
 
 type Inventory struct {
-	ID             string    `json:"id"`
-	ProductPriceID string    `json:"product_price_id"`
-	Name           string    `json:"name"`
-	Status         string    `json:"status"`
-	TotalQuantity  int       `json:"total_quantity"`
-	SoldQuantity   int       `json:"sold_quantity"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID              string    `json:"id"`
+	ProductPriceID  string    `json:"product_price_id"`
+	ProductDetailID string    `json:"product_detail_id"`
+	ProductID       string    `json:"product_id"`
+	Name            string    `json:"name"`
+	Status          string    `json:"status"`
+	TotalQuantity   int       `json:"total_quantity"`
+	SoldQuantity    int       `json:"sold_quantity"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 type InventoryItem struct {

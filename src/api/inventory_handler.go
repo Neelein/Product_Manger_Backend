@@ -55,9 +55,9 @@ func (h *InventoryHandler) ListInventories(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *InventoryHandler) GetInventory(w http.ResponseWriter, r *http.Request) {
-	id := mux.Vars(r)["id"]
+	inventoryID := mux.Vars(r)["inventoryId"]
 
-	inventory, err := h.repo.GetInventoryByID(context.Background(), id)
+	inventory, err := h.repo.GetInventoryByID(context.Background(), inventoryID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
@@ -73,9 +73,9 @@ func (h *InventoryHandler) UpdateInventory(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	id := mux.Vars(r)["id"]
+	inventoryID := mux.Vars(r)["inventoryId"]
 
-	inventory, err := h.repo.GetInventoryByID(context.Background(), id)
+	inventory, err := h.repo.GetInventoryByID(context.Background(), inventoryID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
@@ -104,9 +104,9 @@ func (h *InventoryHandler) DeleteInventory(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	id := mux.Vars(r)["id"]
+	inventoryID := mux.Vars(r)["inventoryId"]
 
-	if err := h.repo.DeleteInventory(context.Background(), id); err != nil {
+	if err := h.repo.DeleteInventory(context.Background(), inventoryID); err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
@@ -121,7 +121,7 @@ func (h *InventoryHandler) CreateItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inventoryID := mux.Vars(r)["id"]
+	inventoryID := mux.Vars(r)["inventoryId"]
 
 	var req domain.CreateInventoryItemRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -146,7 +146,7 @@ func (h *InventoryHandler) CreateItem(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *InventoryHandler) ListItems(w http.ResponseWriter, r *http.Request) {
-	inventoryID := mux.Vars(r)["id"]
+	inventoryID := mux.Vars(r)["inventoryId"]
 
 	items, err := h.repo.ListItemsByInventoryID(context.Background(), inventoryID)
 	if err != nil {
@@ -158,9 +158,9 @@ func (h *InventoryHandler) ListItems(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *InventoryHandler) GetItem(w http.ResponseWriter, r *http.Request) {
-	iid := mux.Vars(r)["iid"]
+	itemID := mux.Vars(r)["itemId"]
 
-	item, err := h.repo.GetItemByID(context.Background(), iid)
+	item, err := h.repo.GetItemByID(context.Background(), itemID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
@@ -176,9 +176,9 @@ func (h *InventoryHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	iid := mux.Vars(r)["iid"]
+	itemID := mux.Vars(r)["itemId"]
 
-	item, err := h.repo.GetItemByID(context.Background(), iid)
+	item, err := h.repo.GetItemByID(context.Background(), itemID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
@@ -210,9 +210,9 @@ func (h *InventoryHandler) DeleteItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	iid := mux.Vars(r)["iid"]
+	itemID := mux.Vars(r)["itemId"]
 
-	if err := h.repo.DeleteItem(context.Background(), iid); err != nil {
+	if err := h.repo.DeleteItem(context.Background(), itemID); err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}

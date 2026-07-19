@@ -251,7 +251,7 @@ func (r *ProductRepositoryPGX) GetPriceByID(
 
 	err := r.pool.QueryRow(ctx, "SELECT * FROM get_product_price_by_id($1)", id,
 	).Scan(&p.ID, &p.ProductDetailID, &p.Label, &p.Amount, &p.Currency,
-		&p.SortOrder, &p.CreatedAt, &p.UpdatedAt)
+		&p.SortOrder, &p.InventoryID, &p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrPriceNotFound
@@ -276,7 +276,7 @@ func (r *ProductRepositoryPGX) GetPricesByDetailID(
 	for rows.Next() {
 		var p domain.ProductPrice
 		err := rows.Scan(&p.ID, &p.ProductDetailID, &p.Label, &p.Amount,
-			&p.Currency, &p.SortOrder, &p.CreatedAt, &p.UpdatedAt)
+			&p.Currency, &p.SortOrder, &p.InventoryID, &p.CreatedAt, &p.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("scanning price row: %w", err)
 		}

@@ -68,9 +68,9 @@ func (h *ProductHandler) GetProduct(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
-	id := mux.Vars(r)["id"]
+	productID := mux.Vars(r)["productId"]
 
-	product, err := h.repo.GetByID(context.Background(), id)
+	product, err := h.repo.GetByID(context.Background(), productID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
@@ -83,7 +83,7 @@ func (h *ProductHandler) UpdateProduct(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
-	id := mux.Vars(r)["id"]
+	productID := mux.Vars(r)["productId"]
 
 	var req domain.UpdateProductRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -92,7 +92,7 @@ func (h *ProductHandler) UpdateProduct(
 	}
 
 	product := domain.Product{
-		ID:       id,
+		ID:       productID,
 		Name:     req.Name,
 		Status:   req.Status,
 		Price:    req.Price,
@@ -111,9 +111,9 @@ func (h *ProductHandler) DeleteProduct(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
-	id := mux.Vars(r)["id"]
+	productID := mux.Vars(r)["productId"]
 
-	if err := h.repo.Delete(context.Background(), id); err != nil {
+	if err := h.repo.Delete(context.Background(), productID); err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
@@ -131,7 +131,7 @@ func (h *ProductHandler) CreateDetail(
 		return
 	}
 
-	productID := mux.Vars(r)["id"]
+	productID := mux.Vars(r)["productId"]
 
 	var req domain.CreateDetailRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -164,7 +164,7 @@ func (h *ProductHandler) CreatePrice(
 		return
 	}
 
-	detailID := mux.Vars(r)["did"]
+	detailID := mux.Vars(r)["detailId"]
 
 	var req domain.CreatePriceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -192,7 +192,7 @@ func (h *ProductHandler) GetDetail(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
-	productID := mux.Vars(r)["id"]
+	productID := mux.Vars(r)["productId"]
 
 	detail, err := h.repo.GetDetailByProductID(context.Background(), productID)
 	if err != nil {
@@ -213,9 +213,9 @@ func (h *ProductHandler) UpdateDetail(
 		return
 	}
 
-	id := mux.Vars(r)["id"]
+	productID := mux.Vars(r)["productId"]
 
-	detail, err := h.repo.GetDetailByProductID(context.Background(), id)
+	detail, err := h.repo.GetDetailByProductID(context.Background(), productID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
@@ -243,7 +243,7 @@ func (h *ProductHandler) ListPrices(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
-	productID := mux.Vars(r)["id"]
+	productID := mux.Vars(r)["productId"]
 
 	detail, err := h.repo.GetDetailByProductID(context.Background(), productID)
 	if err != nil {
@@ -264,9 +264,9 @@ func (h *ProductHandler) GetPrice(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
-	pid := mux.Vars(r)["pid"]
+	priceID := mux.Vars(r)["priceId"]
 
-	price, err := h.repo.GetPriceByID(context.Background(), pid)
+	price, err := h.repo.GetPriceByID(context.Background(), priceID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
@@ -285,9 +285,9 @@ func (h *ProductHandler) UpdatePrice(
 		return
 	}
 
-	pid := mux.Vars(r)["pid"]
+	priceID := mux.Vars(r)["priceId"]
 
-	price, err := h.repo.GetPriceByID(context.Background(), pid)
+	price, err := h.repo.GetPriceByID(context.Background(), priceID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return

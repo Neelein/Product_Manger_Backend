@@ -204,7 +204,7 @@ func TestInventoryHandler_GetInventory(t *testing.T) {
 				http.MethodGet,
 				"/api/inventories/"+tt.id,
 				nil,
-				map[string]string{"id": tt.id},
+				map[string]string{"inventoryId": tt.id},
 				handler.GetInventory,
 			)
 			assert.Equal(t, tt.wantStatus, w.Code)
@@ -276,7 +276,7 @@ func TestInventoryHandler_UpdateInventory(t *testing.T) {
 				bytes.NewReader(bodyBytes),
 			)
 			req.Header.Set("Content-Type", "application/json")
-			req = mux.SetURLVars(req, map[string]string{"id": tt.id})
+			req = mux.SetURLVars(req, map[string]string{"inventoryId": tt.id})
 			req = req.WithContext(api.ContextWithMember(req.Context(), member))
 			w := httptest.NewRecorder()
 			handler.UpdateInventory(w, req)
@@ -305,7 +305,7 @@ func TestInventoryHandler_UpdateInventory_Unauthorized(t *testing.T) {
 		http.MethodPost,
 		"/api/inventories/some-id/update",
 		body,
-		map[string]string{"id": "some-id"},
+		map[string]string{"inventoryId": "some-id"},
 		handler.UpdateInventory,
 	)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
@@ -345,7 +345,7 @@ func TestInventoryHandler_DeleteInventory(t *testing.T) {
 				http.MethodPost,
 				"/api/inventories/"+tt.id+"/delete",
 				nil,
-				map[string]string{"id": tt.id},
+				map[string]string{"inventoryId": tt.id},
 				member,
 				handler.DeleteInventory,
 			)
@@ -362,7 +362,7 @@ func TestInventoryHandler_DeleteInventory_Unauthorized(t *testing.T) {
 		http.MethodPost,
 		"/api/inventories/some-id/delete",
 		nil,
-		map[string]string{"id": "some-id"},
+		map[string]string{"inventoryId": "some-id"},
 		handler.DeleteInventory,
 	)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
@@ -420,7 +420,7 @@ func TestInventoryHandler_CreateItem(t *testing.T) {
 				bytes.NewReader(bodyBytes),
 			)
 			req.Header.Set("Content-Type", "application/json")
-			req = mux.SetURLVars(req, map[string]string{"id": tt.id})
+			req = mux.SetURLVars(req, map[string]string{"inventoryId": tt.id})
 			req = req.WithContext(api.ContextWithMember(req.Context(), member))
 			w := httptest.NewRecorder()
 			handler.CreateItem(w, req)
@@ -450,7 +450,7 @@ func TestInventoryHandler_CreateItem_Unauthorized(t *testing.T) {
 		http.MethodPost,
 		"/api/inventories/some-id/items",
 		body,
-		map[string]string{"id": "some-id"},
+		map[string]string{"inventoryId": "some-id"},
 		handler.CreateItem,
 	)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
@@ -477,7 +477,7 @@ func TestInventoryHandler_ListItems(t *testing.T) {
 		http.MethodGet,
 		"/api/inventories/"+inventory.ID+"/items",
 		nil,
-		map[string]string{"id": inventory.ID},
+		map[string]string{"inventoryId": inventory.ID},
 		handler.ListItems,
 	)
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -502,7 +502,7 @@ func TestInventoryHandler_ListItems_Empty(t *testing.T) {
 		http.MethodGet,
 		"/api/inventories/"+inventory.ID+"/items",
 		nil,
-		map[string]string{"id": inventory.ID},
+		map[string]string{"inventoryId": inventory.ID},
 		handler.ListItems,
 	)
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -558,7 +558,7 @@ func TestInventoryHandler_GetItem(t *testing.T) {
 				http.MethodGet,
 				"/api/inventories/"+tt.inventoryID+"/items/"+tt.itemID,
 				nil,
-				map[string]string{"id": tt.inventoryID, "iid": tt.itemID},
+				map[string]string{"inventoryId": tt.inventoryID, "itemId": tt.itemID},
 				handler.GetItem,
 			)
 			assert.Equal(t, tt.wantStatus, w.Code)
@@ -645,7 +645,7 @@ func TestInventoryHandler_UpdateItem(t *testing.T) {
 				bytes.NewReader(bodyBytes),
 			)
 			req.Header.Set("Content-Type", "application/json")
-			req = mux.SetURLVars(req, map[string]string{"id": tt.inventoryID, "iid": tt.itemID})
+			req = mux.SetURLVars(req, map[string]string{"inventoryId": tt.inventoryID, "itemId": tt.itemID})
 			req = req.WithContext(api.ContextWithMember(req.Context(), member))
 			w := httptest.NewRecorder()
 			handler.UpdateItem(w, req)
@@ -675,7 +675,7 @@ func TestInventoryHandler_UpdateItem_Unauthorized(t *testing.T) {
 		http.MethodPost,
 		"/api/inventories/some-id/items/some-iid/update",
 		body,
-		map[string]string{"id": "some-id", "iid": "some-iid"},
+		map[string]string{"inventoryId": "some-id", "itemId": "some-iid"},
 		handler.UpdateItem,
 	)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
@@ -724,7 +724,7 @@ func TestInventoryHandler_DeleteItem(t *testing.T) {
 				http.MethodPost,
 				"/api/inventories/"+tt.inventoryID+"/items/"+tt.itemID+"/delete",
 				nil,
-				map[string]string{"id": tt.inventoryID, "iid": tt.itemID},
+				map[string]string{"inventoryId": tt.inventoryID, "itemId": tt.itemID},
 				member,
 				handler.DeleteItem,
 			)
@@ -741,7 +741,7 @@ func TestInventoryHandler_DeleteItem_Unauthorized(t *testing.T) {
 		http.MethodPost,
 		"/api/inventories/some-id/items/some-iid/delete",
 		nil,
-		map[string]string{"id": "some-id", "iid": "some-iid"},
+		map[string]string{"inventoryId": "some-id", "itemId": "some-iid"},
 		handler.DeleteItem,
 	)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
