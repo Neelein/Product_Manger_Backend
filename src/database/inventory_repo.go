@@ -89,19 +89,18 @@ func (r *InventoryRepositoryPGX) ListInventories(
 	if err != nil {
 		return nil, fmt.Errorf("listing inventories: %w", err)
 	}
-	defer rows.Close()
 
-	var inventories []domain.Inventory
-	for rows.Next() {
-		inv, err := r.scanInventory(rows)
-		if err != nil {
-			return nil, fmt.Errorf("scanning inventory row: %w", err)
-		}
-		inventories = append(inventories, *inv)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterating inventory rows: %w", err)
+	inventories, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.Inventory, error) {
+		var inv domain.Inventory
+		err := row.Scan(
+			&inv.ID, &inv.ProductPriceID, &inv.ProductDetailID, &inv.ProductID, &inv.Name, &inv.Status,
+			&inv.TotalQuantity, &inv.SoldQuantity,
+			&inv.CreatedAt, &inv.UpdatedAt,
+		)
+		return inv, err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("listing inventories: %w", err)
 	}
 
 	if inventories == nil {
@@ -148,11 +147,6 @@ func (r *InventoryRepositoryPGX) CreateItem(
 	ctx context.Context,
 	item *domain.InventoryItem,
 ) error {
-	var cost *float64
-	if item.Cost != 0 {
-		cost = &item.Cost
-	}
-
 	dateAdded := item.DateAdded
 	if dateAdded == "" {
 		dateAdded = time.Now().Format("2006-01-02")
@@ -164,7 +158,7 @@ func (r *InventoryRepositoryPGX) CreateItem(
 	}
 
 	err := r.pool.QueryRow(ctx, "SELECT * FROM create_inventory_item($1, $2, $3, $4, $5)",
-		item.InventoryID, item.ItemCode, status, cost, dateAdded,
+		item.InventoryID, item.ItemCode, status, item.Cost, dateAdded,
 	).Scan(&item.ID, &item.StatusUpdatedAt, &item.CreatedAt, &item.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("creating inventory item: %w", err)
@@ -179,13 +173,12 @@ func (r *InventoryRepositoryPGX) GetItemByID(
 ) (*domain.InventoryItem, error) {
 	var (
 		item     domain.InventoryItem
-		cost     *float64
 		dateAddr time.Time
 	)
 
 	err := r.pool.QueryRow(ctx, "SELECT * FROM get_inventory_item_by_id($1)", id,
 	).Scan(&item.ID, &item.InventoryID, &item.ItemCode, &item.Status,
-		&cost, &dateAddr, &item.StatusUpdatedAt,
+		&item.Cost, &dateAddr, &item.StatusUpdatedAt,
 		&item.CreatedAt, &item.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -194,9 +187,6 @@ func (r *InventoryRepositoryPGX) GetItemByID(
 		return nil, fmt.Errorf("getting inventory item by ID: %w", err)
 	}
 
-	if cost != nil {
-		item.Cost = *cost
-	}
 	item.DateAdded = dateAddr.Format("2006-01-02")
 
 	return &item, nil
@@ -210,30 +200,23 @@ func (r *InventoryRepositoryPGX) ListItemsByInventoryID(
 	if err != nil {
 		return nil, fmt.Errorf("listing inventory items: %w", err)
 	}
-	defer rows.Close()
 
-	var items []domain.InventoryItem
-	for rows.Next() {
+	items, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.InventoryItem, error) {
 		var (
 			item     domain.InventoryItem
-			cost     *float64
 			dateAddr time.Time
 		)
-		err := rows.Scan(&item.ID, &item.InventoryID, &item.ItemCode, &item.Status,
-			&cost, &dateAddr, &item.StatusUpdatedAt,
+		err := row.Scan(&item.ID, &item.InventoryID, &item.ItemCode, &item.Status,
+			&item.Cost, &dateAddr, &item.StatusUpdatedAt,
 			&item.CreatedAt, &item.UpdatedAt)
 		if err != nil {
-			return nil, fmt.Errorf("scanning inventory item row: %w", err)
-		}
-		if cost != nil {
-			item.Cost = *cost
+			return item, err
 		}
 		item.DateAdded = dateAddr.Format("2006-01-02")
-		items = append(items, item)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterating inventory item rows: %w", err)
+		return item, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("listing inventory items: %w", err)
 	}
 
 	if items == nil {
@@ -247,18 +230,13 @@ func (r *InventoryRepositoryPGX) UpdateItem(
 	ctx context.Context,
 	item *domain.InventoryItem,
 ) error {
-	var cost *float64
-	if item.Cost != 0 {
-		cost = &item.Cost
-	}
-
 	dateAdded := item.DateAdded
 	if dateAdded == "" {
 		dateAdded = time.Now().Format("2006-01-02")
 	}
 
 	err := r.pool.QueryRow(ctx, "SELECT * FROM update_inventory_item($1, $2, $3, $4, $5)",
-		item.ID, item.ItemCode, item.Status, cost, dateAdded,
+		item.ID, item.ItemCode, item.Status, item.Cost, dateAdded,
 	).Scan(&item.StatusUpdatedAt, &item.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

@@ -38,6 +38,7 @@ func main() {
 	api.RegisterProductRoutes(r, repo, memberRepo, sessionRepo)
 	api.RegisterInventoryRoutes(r, inventoryRepo, memberRepo, sessionRepo)
 	api.RegisterMemberRoutes(r, memberRepo, sessionRepo)
+	api.RegisterAnnouncementRoutes(r, database.NewAnnouncementRepositoryPGX(pool), memberRepo, sessionRepo)
 
 	log.Println("Server starting on :8080")
 	log.Fatal(http.ListenAndServe(":8080", r))

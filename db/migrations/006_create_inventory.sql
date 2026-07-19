@@ -14,7 +14,7 @@ CREATE TABLE inventory_items (
     inventory_id      UUID        NOT NULL REFERENCES inventories(id) ON DELETE CASCADE,
     item_code         VARCHAR(255) NOT NULL,
     status            VARCHAR(50) NOT NULL DEFAULT '可用',
-    cost              NUMERIC(10,2),
+    cost              NUMERIC(10,2) NOT NULL DEFAULT 0,
     date_added        DATE        NOT NULL DEFAULT CURRENT_DATE,
     status_updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),

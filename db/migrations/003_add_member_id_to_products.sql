@@ -1,4 +1,5 @@
 ALTER TABLE products
-ADD COLUMN member_id UUID REFERENCES members(id) ON DELETE SET NULL;
+ADD COLUMN member_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000'
+    REFERENCES members(id) ON DELETE SET DEFAULT;
 
 CREATE INDEX idx_products_member_id ON products(member_id);
