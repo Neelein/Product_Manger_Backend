@@ -56,6 +56,7 @@ type ProductPrice struct {
 	Amount          float64   `json:"amount"`
 	Currency        string    `json:"currency"`
 	SortOrder       int       `json:"sort_order"`
+	InventoryID     *string   `json:"inventory_id"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }

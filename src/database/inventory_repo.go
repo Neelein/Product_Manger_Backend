@@ -23,7 +23,7 @@ func NewInventoryRepositoryPGX(pool *pgxpool.Pool) *InventoryRepositoryPGX {
 func (r *InventoryRepositoryPGX) scanInventory(row pgx.Row) (*domain.Inventory, error) {
 	var inv domain.Inventory
 	err := row.Scan(
-		&inv.ID, &inv.ProductPriceID, &inv.Name, &inv.Status,
+		&inv.ID, &inv.ProductPriceID, &inv.ProductDetailID, &inv.ProductID, &inv.Name, &inv.Status,
 		&inv.TotalQuantity, &inv.SoldQuantity,
 		&inv.CreatedAt, &inv.UpdatedAt,
 	)

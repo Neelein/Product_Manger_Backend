@@ -177,12 +177,12 @@ $$;
 
 CREATE OR REPLACE FUNCTION get_inventory_by_id(p_id UUID)
 RETURNS TABLE(
-    id UUID, product_price_id UUID, name VARCHAR, status VARCHAR,
+    id UUID, product_price_id UUID, product_detail_id UUID, product_id UUID, name VARCHAR, status VARCHAR,
     total_quantity BIGINT, sold_quantity BIGINT,
     created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ
 )
 LANGUAGE sql AS $$
-    SELECT i.id, i.product_price_id,
+    SELECT i.id, i.product_price_id, pr.product_detail_id, p.id AS product_id,
            CONCAT(p.name, '-', pr.label)::VARCHAR AS name,
            i.status,
            COUNT(it.id) AS total_quantity,
@@ -194,17 +194,17 @@ LANGUAGE sql AS $$
     JOIN products p ON p.id = pd.product_id
     LEFT JOIN inventory_items it ON it.inventory_id = i.id
     WHERE i.id = p_id
-    GROUP BY i.id, i.product_price_id, p.name, pr.label, i.status, i.created_at, i.updated_at;
+    GROUP BY i.id, i.product_price_id, pr.product_detail_id, p.id, p.name, pr.label, i.status, i.created_at, i.updated_at;
 $$;
 
 CREATE OR REPLACE FUNCTION get_inventory_by_price_id(p_product_price_id UUID)
 RETURNS TABLE(
-    id UUID, product_price_id UUID, name VARCHAR, status VARCHAR,
+    id UUID, product_price_id UUID, product_detail_id UUID, product_id UUID, name VARCHAR, status VARCHAR,
     total_quantity BIGINT, sold_quantity BIGINT,
     created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ
 )
 LANGUAGE sql AS $$
-    SELECT i.id, i.product_price_id,
+    SELECT i.id, i.product_price_id, pr.product_detail_id, p.id AS product_id,
            CONCAT(p.name, '-', pr.label)::VARCHAR AS name,
            i.status,
            COUNT(it.id) AS total_quantity,
@@ -216,17 +216,17 @@ LANGUAGE sql AS $$
     JOIN products p ON p.id = pd.product_id
     LEFT JOIN inventory_items it ON it.inventory_id = i.id
     WHERE i.product_price_id = p_product_price_id
-    GROUP BY i.id, i.product_price_id, p.name, pr.label, i.status, i.created_at, i.updated_at;
+    GROUP BY i.id, i.product_price_id, pr.product_detail_id, p.id, p.name, pr.label, i.status, i.created_at, i.updated_at;
 $$;
 
 CREATE OR REPLACE FUNCTION list_inventories()
 RETURNS TABLE(
-    id UUID, product_price_id UUID, name VARCHAR, status VARCHAR,
+    id UUID, product_price_id UUID, product_detail_id UUID, product_id UUID, name VARCHAR, status VARCHAR,
     total_quantity BIGINT, sold_quantity BIGINT,
     created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ
 )
 LANGUAGE sql AS $$
-    SELECT i.id, i.product_price_id,
+    SELECT i.id, i.product_price_id, pr.product_detail_id, p.id AS product_id,
            CONCAT(p.name, '-', pr.label)::VARCHAR AS name,
            i.status,
            COUNT(it.id) AS total_quantity,
@@ -237,7 +237,7 @@ LANGUAGE sql AS $$
     JOIN product_details pd ON pd.id = pr.product_detail_id
     JOIN products p ON p.id = pd.product_id
     LEFT JOIN inventory_items it ON it.inventory_id = i.id
-    GROUP BY i.id, i.product_price_id, p.name, pr.label, i.status, i.created_at, i.updated_at
+    GROUP BY i.id, i.product_price_id, pr.product_detail_id, p.id, p.name, pr.label, i.status, i.created_at, i.updated_at
     ORDER BY i.created_at DESC;
 $$;
 

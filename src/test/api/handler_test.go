@@ -63,6 +63,7 @@ func runMigration(ctx context.Context, pool *pgxpool.Pool) {
 		"../../../db/migrations/006_create_inventory.sql",
 		"../../../db/migrations/007_simplify_inventories.sql",
 		"../../../db/migrations/008_create_functions.sql",
+		"../../../db/migrations/009_add_inventory_id_to_price_functions.sql",
 	} {
 		schema, err := os.ReadFile(file)
 		if err != nil {
@@ -290,7 +291,7 @@ func TestHandler_GetProduct(t *testing.T) {
 				http.MethodGet,
 				"/api/products/"+tt.id,
 				nil,
-				map[string]string{"id": tt.id},
+				map[string]string{"productId": tt.id},
 				handler.GetProduct,
 			)
 
@@ -365,7 +366,7 @@ func TestHandler_UpdateProduct(t *testing.T) {
 				http.MethodPost,
 				"/api/products/"+tt.id+"/update",
 				bodyBytes,
-				map[string]string{"id": tt.id},
+				map[string]string{"productId": tt.id},
 				handler.UpdateProduct,
 			)
 
@@ -430,7 +431,7 @@ func TestHandler_CreateDetail(t *testing.T) {
 
 			req := httptest.NewRequest(http.MethodPost, "/api/products/"+tt.id+"/details", bytes.NewReader(bodyBytes))
 			req.Header.Set("Content-Type", "application/json")
-			req = mux.SetURLVars(req, map[string]string{"id": tt.id})
+			req = mux.SetURLVars(req, map[string]string{"productId": tt.id})
 			req = req.WithContext(api.ContextWithMember(req.Context(), member))
 			w := httptest.NewRecorder()
 			handler.CreateDetail(w, req)
@@ -460,7 +461,7 @@ func TestHandler_CreateDetail_Unauthorized(t *testing.T) {
 		http.MethodPost,
 		"/api/products/some-id/details",
 		body,
-		map[string]string{"id": "some-id"},
+		map[string]string{"productId": "some-id"},
 		handler.CreateDetail,
 	)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
@@ -530,7 +531,7 @@ func TestHandler_CreatePrice(t *testing.T) {
 				bytes.NewReader(bodyBytes),
 			)
 			req.Header.Set("Content-Type", "application/json")
-			req = mux.SetURLVars(req, map[string]string{"id": tt.productID, "did": tt.detailID})
+			req = mux.SetURLVars(req, map[string]string{"productId": tt.productID, "detailId": tt.detailID})
 			req = req.WithContext(api.ContextWithMember(req.Context(), member))
 			w := httptest.NewRecorder()
 			handler.CreatePrice(w, req)
@@ -561,7 +562,7 @@ func TestHandler_CreatePrice_Unauthorized(t *testing.T) {
 		http.MethodPost,
 		"/api/products/some-id/details/some-did/prices",
 		body,
-		map[string]string{"id": "some-id", "did": "some-did"},
+		map[string]string{"productId": "some-id", "detailId": "some-did"},
 		handler.CreatePrice,
 	)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
@@ -607,7 +608,7 @@ func TestHandler_GetDetail(t *testing.T) {
 				http.MethodGet,
 				"/api/products/"+tt.id+"/detail",
 				nil,
-				map[string]string{"id": tt.id},
+				map[string]string{"productId": tt.id},
 				handler.GetDetail,
 			)
 
@@ -687,7 +688,7 @@ func TestHandler_UpdateDetail(t *testing.T) {
 				bytes.NewReader(bodyBytes),
 			)
 			req.Header.Set("Content-Type", "application/json")
-			req = mux.SetURLVars(req, map[string]string{"id": tt.id})
+			req = mux.SetURLVars(req, map[string]string{"productId": tt.id})
 			req = req.WithContext(api.ContextWithMember(req.Context(), member))
 			w := httptest.NewRecorder()
 			handler.UpdateDetail(w, req)
@@ -717,7 +718,7 @@ func TestHandler_UpdateDetail_Unauthorized(t *testing.T) {
 		http.MethodPost,
 		"/api/products/some-id/detail/update",
 		body,
-		map[string]string{"id": "some-id"},
+		map[string]string{"productId": "some-id"},
 		handler.UpdateDetail,
 	)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
@@ -747,7 +748,7 @@ func TestHandler_ListPrices(t *testing.T) {
 			http.MethodGet,
 			"/api/products/"+product.ID+"/detail/prices",
 			nil,
-			map[string]string{"id": product.ID},
+			map[string]string{"productId": product.ID},
 			handler.ListPrices,
 		)
 
@@ -764,7 +765,7 @@ func TestHandler_ListPrices(t *testing.T) {
 			http.MethodGet,
 			"/api/products/00000000-0000-0000-0000-000000000000/detail/prices",
 			nil,
-			map[string]string{"id": "00000000-0000-0000-0000-000000000000"},
+			map[string]string{"productId": "00000000-0000-0000-0000-000000000000"},
 			handler.ListPrices,
 		)
 		assert.Equal(t, http.StatusNotFound, w.Code)
@@ -818,7 +819,7 @@ func TestHandler_GetPrice(t *testing.T) {
 				http.MethodGet,
 				"/api/products/"+tt.productID+"/detail/prices/"+tt.priceID,
 				nil,
-				map[string]string{"id": tt.productID, "pid": tt.priceID},
+				map[string]string{"productId": tt.productID, "priceId": tt.priceID},
 				handler.GetPrice,
 			)
 
@@ -911,7 +912,7 @@ func TestHandler_UpdatePrice(t *testing.T) {
 				bytes.NewReader(bodyBytes),
 			)
 			req.Header.Set("Content-Type", "application/json")
-			req = mux.SetURLVars(req, map[string]string{"id": tt.productID, "pid": tt.priceID})
+			req = mux.SetURLVars(req, map[string]string{"productId": tt.productID, "priceId": tt.priceID})
 			req = req.WithContext(api.ContextWithMember(req.Context(), member))
 			w := httptest.NewRecorder()
 			handler.UpdatePrice(w, req)
@@ -942,7 +943,7 @@ func TestHandler_UpdatePrice_Unauthorized(t *testing.T) {
 		http.MethodPost,
 		"/api/products/some-id/detail/prices/some-pid/update",
 		body,
-		map[string]string{"id": "some-id", "pid": "some-pid"},
+		map[string]string{"productId": "some-id", "priceId": "some-pid"},
 		handler.UpdatePrice,
 	)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
@@ -981,7 +982,7 @@ func TestHandler_DeleteProduct(t *testing.T) {
 				http.MethodPost,
 				"/api/products/"+tt.id+"/delete",
 				nil,
-				map[string]string{"id": tt.id},
+				map[string]string{"productId": tt.id},
 				handler.DeleteProduct,
 			)
 
