@@ -71,7 +71,7 @@ func (h *AnnouncementHandler) CreateAnnouncement(w http.ResponseWriter, r *http.
 	}
 
 	imagePath := ""
-	filename, err := saveUploadedFile(r, "image", "/Users/neal/Desktop/Project/Product_Manger/media/images/announcements")
+	filename, err := saveUploadedFile(r, "image", filepath.Join(os.Getenv("MEDIA_ROOT"), "images/announcements"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -172,7 +172,7 @@ func (h *AnnouncementHandler) UpdateAnnouncement(w http.ResponseWriter, r *http.
 		announcement.Content = content
 	}
 
-	filename, err := saveUploadedFile(r, "image", "/Users/neal/Desktop/Project/Product_Manger/media/images/announcements")
+	filename, err := saveUploadedFile(r, "image", filepath.Join(os.Getenv("MEDIA_ROOT"), "images/announcements"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

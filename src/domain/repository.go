@@ -53,3 +53,21 @@ type AnnouncementRepository interface {
 	Update(ctx context.Context, announcement *Announcement) error
 	Delete(ctx context.Context, id string) error
 }
+
+type ChatRoomRepository interface {
+	CreateRoom(ctx context.Context, room *ChatRoom, memberIDs []string) error
+	GetRoomByID(ctx context.Context, roomID string, memberID string) (*ChatRoomWithMeta, error)
+	ListRoomsByMember(ctx context.Context, memberID string) ([]ChatRoomWithMeta, error)
+	UpdateRoom(ctx context.Context, roomID string, name string) error
+	DeleteRoom(ctx context.Context, roomID string) error
+	AddMembers(ctx context.Context, roomID string, memberIDs []string) error
+	RemoveMember(ctx context.Context, roomID string, memberID string) error
+
+	SendMessage(ctx context.Context, msg *ChatMessage) error
+	ListMessages(ctx context.Context, roomID string, beforeID string, limit int) ([]ChatMessage, error)
+	DeleteMessage(ctx context.Context, messageID string) error
+
+	MarkAsRead(ctx context.Context, messageID string, memberID string) error
+	GetReadBy(ctx context.Context, messageID string) ([]ReadReceipt, error)
+	CountUnread(ctx context.Context, roomID string, memberID string) (int64, error)
+}
