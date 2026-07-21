@@ -77,7 +77,7 @@ func (h *AnnouncementHandler) CreateAnnouncement(w http.ResponseWriter, r *http.
 		return
 	}
 	if filename != "" {
-		imagePath = "/media/images/announcements/" + filename
+		imagePath = os.Getenv("API_DOMAIN") + "/media/images/announcements/" + filename
 	}
 
 	announcement := domain.Announcement{
@@ -178,7 +178,7 @@ func (h *AnnouncementHandler) UpdateAnnouncement(w http.ResponseWriter, r *http.
 		return
 	}
 	if filename != "" {
-		announcement.ImagePath = "/media/images/announcements/" + filename
+		announcement.ImagePath = os.Getenv("API_DOMAIN") + "/media/images/announcements/" + filename
 	} else if imagePath != "" {
 		announcement.ImagePath = imagePath
 	}
