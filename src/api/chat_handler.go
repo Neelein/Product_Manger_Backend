@@ -268,7 +268,7 @@ func (h *ChatRoomHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if filename != "" {
-		imagePath = "/media/images/chat/" + filename
+		imagePath = os.Getenv("API_DOMAIN") + "/media/images/chat/" + filename
 	}
 
 	filePath := ""
@@ -278,7 +278,7 @@ func (h *ChatRoomHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if filename != "" {
-		filePath = "/media/files/chat/" + filename
+		filePath = os.Getenv("API_DOMAIN") + "/media/files/chat/" + filename
 	}
 
 	msg := domain.ChatMessage{
