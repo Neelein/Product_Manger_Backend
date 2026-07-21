@@ -39,6 +39,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
+          key_base64: true
           script: |
             docker pull ghcr.io/neelein/product_manager_backend:latest
             docker exec my_postgres_db psql -U root -c "CREATE DATABASE productdb;" 2>/dev/null || true
