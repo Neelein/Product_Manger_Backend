@@ -61,13 +61,13 @@ func runMigration(ctx context.Context, pool *pgxpool.Pool) {
 		"../../../db/migrations/001_create_products.up.sql",
 		"../../../db/migrations/002_create_members.up.sql",
 		"../../../db/migrations/003_add_member_id_to_products.up.sql",
-		"../../../db/migrations/006_create_inventory.up.sql",
-		"../../../db/migrations/007_simplify_inventories.up.sql",
-		"../../../db/migrations/008_create_functions.up.sql",
-		"../../../db/migrations/009_add_inventory_id_to_price_functions.up.sql",
-		"../../../db/migrations/010_create_announcements.up.sql",
-		"../../../db/migrations/011_set_not_null.up.sql",
-		"../../../db/migrations/012_create_chat.up.sql",
+		"../../../db/migrations/004_create_inventory.up.sql",
+		"../../../db/migrations/005_simplify_inventories.up.sql",
+		"../../../db/migrations/006_create_functions.up.sql",
+		"../../../db/migrations/007_add_inventory_id_to_price_functions.up.sql",
+		"../../../db/migrations/008_create_announcements.up.sql",
+		"../../../db/migrations/009_set_not_null.up.sql",
+		"../../../db/migrations/010_create_chat.up.sql",
 	} {
 		schema, err := os.ReadFile(file)
 		if err != nil {
