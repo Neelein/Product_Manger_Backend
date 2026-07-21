@@ -2,6 +2,8 @@ package api
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"backend/src/domain"
 
@@ -63,5 +65,24 @@ func RegisterAnnouncementRoutes(r *mux.Router, repo domain.AnnouncementRepositor
 	r.Handle("/api/announcements/{announcementId}/update", auth(http.HandlerFunc(h.UpdateAnnouncement))).Methods("POST")
 	r.Handle("/api/announcements/{announcementId}/delete", auth(http.HandlerFunc(h.DeleteAnnouncement))).Methods("POST")
 
-	r.PathPrefix("/media/images/announcements/").Handler(http.StripPrefix("/media/images/announcements/", http.FileServer(http.Dir("/Users/neal/Desktop/Project/Product_Manger/media/images/announcements"))))
+	r.PathPrefix("/media/images/announcements/").Handler(http.StripPrefix("/media/images/announcements/", http.FileServer(http.Dir(filepath.Join(os.Getenv("MEDIA_ROOT"), "images/announcements")))))
+}
+
+func RegisterChatRoutes(r *mux.Router, repo domain.ChatRoomRepository, memberRepo domain.MemberRepository, sessionRepo domain.SessionRepository) {
+	h := NewChatRoomHandler(repo)
+	auth := AuthMiddleware(sessionRepo, memberRepo)
+
+	r.Handle("/api/chat/rooms", auth(http.HandlerFunc(h.CreateRoom))).Methods("POST")
+	r.Handle("/api/chat/rooms", auth(http.HandlerFunc(h.ListRooms))).Methods("GET")
+	r.Handle("/api/chat/rooms/{roomId}", auth(http.HandlerFunc(h.GetRoom))).Methods("GET")
+	r.Handle("/api/chat/rooms/{roomId}/update", auth(http.HandlerFunc(h.UpdateRoom))).Methods("POST")
+	r.Handle("/api/chat/rooms/{roomId}/delete", auth(http.HandlerFunc(h.DeleteRoom))).Methods("POST")
+	r.Handle("/api/chat/rooms/{roomId}/members", auth(http.HandlerFunc(h.AddMembers))).Methods("POST")
+	r.Handle("/api/chat/rooms/{roomId}/members/{memberId}/remove", auth(http.HandlerFunc(h.RemoveMember))).Methods("POST")
+	r.Handle("/api/chat/rooms/{roomId}/messages", auth(http.HandlerFunc(h.ListMessages))).Methods("GET")
+	r.Handle("/api/chat/rooms/{roomId}/messages", auth(http.HandlerFunc(h.SendMessage))).Methods("POST")
+	r.Handle("/api/chat/rooms/{roomId}/messages/{messageId}/delete", auth(http.HandlerFunc(h.DeleteMessage))).Methods("POST")
+	r.Handle("/api/chat/rooms/{roomId}/read", auth(http.HandlerFunc(h.MarkAsRead))).Methods("POST")
+	r.Handle("/api/chat/rooms/{roomId}/messages/{messageId}/read-by", auth(http.HandlerFunc(h.GetReadBy))).Methods("GET")
+	r.Handle("/api/chat/rooms/{roomId}/unread", auth(http.HandlerFunc(h.CountUnread))).Methods("GET")
 }

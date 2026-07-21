@@ -50,23 +50,24 @@ func TestMain(m *testing.M) {
 }
 
 func dropTables(ctx context.Context, pool *pgxpool.Pool) {
-	for _, table := range []string{"announcements", "inventory_items", "inventories", "members", "product_prices", "product_details", "products"} {
+	for _, table := range []string{"read_receipts", "chat_messages", "chat_room_members", "chat_rooms", "announcements", "inventory_items", "inventories", "members", "product_prices", "product_details", "products"} {
 		_, _ = pool.Exec(ctx, "DROP TABLE IF EXISTS "+table+" CASCADE")
 	}
-	_, _ = pool.Exec(ctx, "DROP FUNCTION IF EXISTS create_member, get_member_by_email, get_member_by_id, update_member, create_product, list_products, get_product_by_id, update_product, delete_product, create_product_detail, get_product_detail_by_product, update_product_detail, create_product_price, get_product_price_by_id, list_product_prices_by_detail, update_product_price, create_inventory, get_inventory_by_id, get_inventory_by_price_id, list_inventories, update_inventory, delete_inventory, create_inventory_item, get_inventory_item_by_id, list_inventory_items, update_inventory_item, delete_inventory_item, create_announcement, get_announcement_by_id, list_announcements, count_announcements, update_announcement, delete_announcement CASCADE")
+	_, _ = pool.Exec(ctx, "DROP FUNCTION IF EXISTS create_member, get_member_by_email, get_member_by_id, update_member, create_product, list_products, get_product_by_id, update_product, delete_product, create_product_detail, get_product_detail_by_product, update_product_detail, create_product_price, get_product_price_by_id, list_product_prices_by_detail, update_product_price, create_inventory, get_inventory_by_id, get_inventory_by_price_id, list_inventories, update_inventory, delete_inventory, create_inventory_item, get_inventory_item_by_id, list_inventory_items, update_inventory_item, delete_inventory_item, create_announcement, get_announcement_by_id, list_announcements, count_announcements, update_announcement, delete_announcement, create_chat_room, add_chat_room_members, get_chat_room_by_id, list_chat_rooms_by_member, update_chat_room, delete_chat_room, remove_chat_room_member, send_message, list_messages, delete_message, mark_message_read, get_message_read_by, count_room_unread CASCADE")
 }
 
 func runMigration(ctx context.Context, pool *pgxpool.Pool) {
 	for _, file := range []string{
-		"../../../db/migrations/001_create_products.sql",
-		"../../../db/migrations/002_create_members.sql",
-		"../../../db/migrations/003_add_member_id_to_products.sql",
-		"../../../db/migrations/006_create_inventory.sql",
-		"../../../db/migrations/007_simplify_inventories.sql",
-		"../../../db/migrations/008_create_functions.sql",
-		"../../../db/migrations/009_add_inventory_id_to_price_functions.sql",
-		"../../../db/migrations/010_create_announcements.sql",
-		"../../../db/migrations/011_set_not_null.sql",
+		"../../../db/migrations/001_create_products.up.sql",
+		"../../../db/migrations/002_create_members.up.sql",
+		"../../../db/migrations/003_add_member_id_to_products.up.sql",
+		"../../../db/migrations/006_create_inventory.up.sql",
+		"../../../db/migrations/007_simplify_inventories.up.sql",
+		"../../../db/migrations/008_create_functions.up.sql",
+		"../../../db/migrations/009_add_inventory_id_to_price_functions.up.sql",
+		"../../../db/migrations/010_create_announcements.up.sql",
+		"../../../db/migrations/011_set_not_null.up.sql",
+		"../../../db/migrations/012_create_chat.up.sql",
 	} {
 		schema, err := os.ReadFile(file)
 		if err != nil {
