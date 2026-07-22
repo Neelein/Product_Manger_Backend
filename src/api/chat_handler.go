@@ -35,42 +35,18 @@ func (h *ChatRoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Name == "" || req.Type == "" {
-		writeError(w, http.StatusBadRequest, "name and type are required")
+	if req.Name == "" {
+		writeError(w, http.StatusBadRequest, "name is required")
 		return
-	}
-
-	memberIDs := req.MemberIDs
-	if memberIDs == nil {
-		memberIDs = []string{}
-	}
-
-	if req.Type == "direct" {
-		if len(memberIDs) != 1 {
-			writeError(w, http.StatusBadRequest, "direct room requires exactly one other member")
-			return
-		}
-	}
-
-	hasCreator := false
-	for _, id := range memberIDs {
-		if id == member.ID {
-			hasCreator = true
-			break
-		}
-	}
-	if !hasCreator {
-		memberIDs = append(memberIDs, member.ID)
 	}
 
 	room := domain.ChatRoom{
 		ID:        uuid.New().String(),
 		Name:      req.Name,
-		Type:      req.Type,
 		CreatedBy: member.ID,
 	}
 
-	if err := h.repo.CreateRoom(context.Background(), &room, memberIDs); err != nil {
+	if err := h.repo.CreateRoom(context.Background(), &room); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

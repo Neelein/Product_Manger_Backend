@@ -54,23 +54,13 @@ func cleanupChat(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestChatHandler_CreateRoom_Group(t *testing.T) {
+func TestChatHandler_CreateRoom(t *testing.T) {
 	defer cleanupChat(t)
 	chatRepo, memberRepo, sessionCache, handler := setupChatTest()
 	member := createChatMember(t, memberRepo, sessionCache)
 
-	other := domain.Member{
-		Email:    "other-" + t.Name() + "-" + uuid.New().String()[:8] + "@example.com",
-		Password: "password",
-		Name:     "Other User",
-	}
-	err := memberRepo.Create(context.Background(), &other)
-	require.NoError(t, err)
-
 	body, _ := json.Marshal(domain.CreateRoomRequest{
-		Name:      "Group Chat",
-		Type:      "group",
-		MemberIDs: []string{other.ID},
+		Name: "Group Chat",
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/chat/rooms", bytes.NewReader(body))
@@ -82,49 +72,16 @@ func TestChatHandler_CreateRoom_Group(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, w.Code)
 
 	var resp domain.RoomResponse
-	err = json.NewDecoder(w.Body).Decode(&resp)
+	err := json.NewDecoder(w.Body).Decode(&resp)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, resp.Room.ID)
-	assert.Equal(t, "group", resp.Room.Type)
 	assert.Equal(t, "Group Chat", resp.Room.Name)
 	assert.True(t, resp.Room.IsMember)
 
 	_ = chatRepo
 }
 
-func TestChatHandler_CreateRoom_Direct(t *testing.T) {
-	defer cleanupChat(t)
-	_, memberRepo, sessionCache, handler := setupChatTest()
-	member := createChatMember(t, memberRepo, sessionCache)
 
-	other := domain.Member{
-		Email:    "direct-other-" + t.Name() + "-" + uuid.New().String()[:8] + "@example.com",
-		Password: "password",
-		Name:     "Direct Other",
-	}
-	err := memberRepo.Create(context.Background(), &other)
-	require.NoError(t, err)
-
-	body, _ := json.Marshal(domain.CreateRoomRequest{
-		Name:      "Direct Chat",
-		Type:      "direct",
-		MemberIDs: []string{other.ID},
-	})
-
-	req := httptest.NewRequest(http.MethodPost, "/api/chat/rooms", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req = req.WithContext(api.ContextWithMember(req.Context(), member))
-	w := httptest.NewRecorder()
-	handler.CreateRoom(w, req)
-
-	assert.Equal(t, http.StatusCreated, w.Code)
-
-	var resp domain.RoomResponse
-	err = json.NewDecoder(w.Body).Decode(&resp)
-	assert.NoError(t, err)
-	assert.NotEmpty(t, resp.Room.ID)
-	assert.Equal(t, "direct", resp.Room.Type)
-}
 
 func TestChatHandler_ListRooms(t *testing.T) {
 	defer cleanupChat(t)
@@ -133,8 +90,8 @@ func TestChatHandler_ListRooms(t *testing.T) {
 
 	for _, name := range []string{"Room A", "Room B"} {
 		err := chatRepo.CreateRoom(context.Background(), &domain.ChatRoom{
-			Name: name, Type: "group", CreatedBy: member.ID,
-		}, []string{member.ID})
+			Name: name, CreatedBy: member.ID,
+		})
 		require.NoError(t, err)
 	}
 
@@ -157,9 +114,9 @@ func TestChatHandler_GetRoom(t *testing.T) {
 	member := createChatMember(t, memberRepo, sessionCache)
 
 	room := domain.ChatRoom{
-		Name: "Test Room", Type: "group", CreatedBy: member.ID,
+		Name: "Test Room", CreatedBy: member.ID,
 	}
-	err := chatRepo.CreateRoom(context.Background(), &room, []string{member.ID})
+	err := chatRepo.CreateRoom(context.Background(), &room)
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/chat/rooms/"+room.ID, nil)
@@ -197,9 +154,9 @@ func TestChatHandler_SendMessage(t *testing.T) {
 	member := createChatMember(t, memberRepo, sessionCache)
 
 	room := domain.ChatRoom{
-		Name: "Test Room", Type: "group", CreatedBy: member.ID,
+		Name: "Test Room", CreatedBy: member.ID,
 	}
-	err := chatRepo.CreateRoom(context.Background(), &room, []string{member.ID})
+	err := chatRepo.CreateRoom(context.Background(), &room)
 	require.NoError(t, err)
 
 	var b bytes.Buffer
@@ -230,9 +187,9 @@ func TestChatHandler_ListMessages(t *testing.T) {
 	member := createChatMember(t, memberRepo, sessionCache)
 
 	room := domain.ChatRoom{
-		Name: "Test Room", Type: "group", CreatedBy: member.ID,
+		Name: "Test Room", CreatedBy: member.ID,
 	}
-	err := chatRepo.CreateRoom(context.Background(), &room, []string{member.ID})
+	err := chatRepo.CreateRoom(context.Background(), &room)
 	require.NoError(t, err)
 
 	chatRepo.SendMessage(context.Background(), &domain.ChatMessage{
@@ -262,9 +219,9 @@ func TestChatHandler_DeleteMessage(t *testing.T) {
 	member := createChatMember(t, memberRepo, sessionCache)
 
 	room := domain.ChatRoom{
-		Name: "Test Room", Type: "group", CreatedBy: member.ID,
+		Name: "Test Room", CreatedBy: member.ID,
 	}
-	err := chatRepo.CreateRoom(context.Background(), &room, []string{member.ID})
+	err := chatRepo.CreateRoom(context.Background(), &room)
 	require.NoError(t, err)
 
 	msg := domain.ChatMessage{
@@ -296,9 +253,11 @@ func TestChatHandler_MarkAsRead(t *testing.T) {
 	require.NoError(t, err)
 
 	room := domain.ChatRoom{
-		Name: "Test Room", Type: "group", CreatedBy: other.ID,
+		Name: "Test Room", CreatedBy: other.ID,
 	}
-	err = chatRepo.CreateRoom(context.Background(), &room, []string{other.ID, member.ID})
+	err = chatRepo.CreateRoom(context.Background(), &room)
+	require.NoError(t, err)
+	err = chatRepo.AddMembers(context.Background(), room.ID, []string{member.ID})
 	require.NoError(t, err)
 
 	msg := domain.ChatMessage{

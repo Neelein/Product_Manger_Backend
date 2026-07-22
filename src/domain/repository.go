@@ -55,7 +55,7 @@ type AnnouncementRepository interface {
 }
 
 type ChatRoomRepository interface {
-	CreateRoom(ctx context.Context, room *ChatRoom, memberIDs []string) error
+	CreateRoom(ctx context.Context, room *ChatRoom) error
 	GetRoomByID(ctx context.Context, roomID string, memberID string) (*ChatRoomWithMeta, error)
 	ListRoomsByMember(ctx context.Context, memberID string) ([]ChatRoomWithMeta, error)
 	UpdateRoom(ctx context.Context, roomID string, name string) error
