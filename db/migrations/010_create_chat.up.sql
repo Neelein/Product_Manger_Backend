@@ -1,7 +1,6 @@
 CREATE TABLE chat_rooms (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name        VARCHAR(255),
-    type        VARCHAR(20) NOT NULL DEFAULT 'group' CHECK (type IN ('direct', 'group')),
     created_by  UUID NOT NULL REFERENCES members(id),
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -39,13 +38,12 @@ CREATE INDEX idx_read_receipts_message_id ON read_receipts (message_id);
 
 CREATE OR REPLACE FUNCTION create_chat_room(
     p_name VARCHAR,
-    p_type VARCHAR,
     p_created_by UUID
 )
 RETURNS TABLE(id UUID, created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ)
 LANGUAGE sql AS $$
-    INSERT INTO chat_rooms (name, type, created_by)
-    VALUES (p_name, p_type, p_created_by)
+    INSERT INTO chat_rooms (name, created_by)
+    VALUES (p_name, p_created_by)
     RETURNING id, created_at, updated_at;
 $$;
 
@@ -66,13 +64,13 @@ CREATE OR REPLACE FUNCTION get_chat_room_by_id(
     p_member_id UUID
 )
 RETURNS TABLE(
-    id UUID, name VARCHAR, type VARCHAR, created_by UUID,
+    id UUID, name VARCHAR, created_by UUID,
     created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ,
     is_member BOOLEAN
 )
 LANGUAGE sql AS $$
     SELECT
-        r.id, r.name, r.type, r.created_by,
+        r.id, r.name, r.created_by,
         r.created_at, r.updated_at,
         EXISTS(SELECT 1 FROM chat_room_members m WHERE m.room_id = r.id AND m.member_id = p_member_id) AS is_member
     FROM chat_rooms r
@@ -81,14 +79,14 @@ $$;
 
 CREATE OR REPLACE FUNCTION list_chat_rooms_by_member(p_member_id UUID)
 RETURNS TABLE(
-    id UUID, name VARCHAR, type VARCHAR, created_by UUID,
+    id UUID, name VARCHAR, created_by UUID,
     created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ,
     last_message_content TEXT, last_message_sender_id UUID, last_message_created_at TIMESTAMPTZ,
     unread_count BIGINT
 )
 LANGUAGE sql AS $$
     SELECT
-        r.id, r.name, r.type, r.created_by,
+        r.id, r.name, r.created_by,
         r.created_at, r.updated_at,
         lm.content AS last_message_content,
         lm.sender_id AS last_message_sender_id,
@@ -105,7 +103,7 @@ LANGUAGE sql AS $$
     ) lm ON TRUE
     LEFT JOIN chat_messages m ON m.room_id = r.id
     LEFT JOIN read_receipts rc ON rc.message_id = m.id AND rc.member_id = p_member_id
-    GROUP BY r.id, r.name, r.type, r.created_by, r.created_at, r.updated_at, lm.content, lm.sender_id, lm.created_at
+    GROUP BY r.id, r.name, r.created_by, r.created_at, r.updated_at, lm.content, lm.sender_id, lm.created_at
     ORDER BY COALESCE(lm.created_at, r.created_at) DESC;
 $$;
 

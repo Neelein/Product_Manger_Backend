@@ -41,14 +41,13 @@ func createTestMemberForChat(t *testing.T, repo *database.MemberRepositoryPGX) d
 	return m
 }
 
-func createTestRoom(t *testing.T, chatRepo *database.ChatRoomRepositoryPGX, _ *database.MemberRepositoryPGX, creator *domain.Member, memberIDs []string) domain.ChatRoom {
+func createTestRoom(t *testing.T, chatRepo *database.ChatRoomRepositoryPGX, _ *database.MemberRepositoryPGX, creator *domain.Member) domain.ChatRoom {
 	t.Helper()
 	room := domain.ChatRoom{
 		Name:      "Test Room",
-		Type:      "group",
 		CreatedBy: creator.ID,
 	}
-	err := chatRepo.CreateRoom(context.Background(), &room, memberIDs)
+	err := chatRepo.CreateRoom(context.Background(), &room)
 	require.NoError(t, err)
 	return room
 }
@@ -59,15 +58,13 @@ func TestChatRoomRepositoryPGX_CreateRoom(t *testing.T) {
 	chatRepo := database.NewChatRoomRepositoryPGX(testPool)
 
 	creator := createTestMemberForChat(t, memberRepo)
-	member2 := createTestMemberForChat(t, memberRepo)
 
-	t.Run("create group room with members", func(t *testing.T) {
+	t.Run("create group room", func(t *testing.T) {
 		room := domain.ChatRoom{
 			Name:      "Test Group",
-			Type:      "group",
 			CreatedBy: creator.ID,
 		}
-		err := chatRepo.CreateRoom(context.Background(), &room, []string{member2.ID})
+		err := chatRepo.CreateRoom(context.Background(), &room)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, room.ID)
 		assert.False(t, room.CreatedAt.IsZero())
@@ -81,7 +78,7 @@ func TestChatRoomRepositoryPGX_GetRoomByID(t *testing.T) {
 	chatRepo := database.NewChatRoomRepositoryPGX(testPool)
 
 	creator := createTestMemberForChat(t, memberRepo)
-	room := createTestRoom(t, chatRepo, memberRepo, &creator, nil)
+	room := createTestRoom(t, chatRepo, memberRepo, &creator)
 
 	t.Run("existing room", func(t *testing.T) {
 		got, err := chatRepo.GetRoomByID(context.Background(), room.ID, creator.ID)
@@ -89,7 +86,6 @@ func TestChatRoomRepositoryPGX_GetRoomByID(t *testing.T) {
 		assert.NotNil(t, got)
 		assert.Equal(t, room.ID, got.ID)
 		assert.Equal(t, room.Name, got.Name)
-		assert.Equal(t, room.Type, got.Type)
 		assert.Equal(t, room.CreatedBy, got.CreatedBy)
 		assert.True(t, got.IsMember)
 	})
@@ -114,8 +110,8 @@ func TestChatRoomRepositoryPGX_ListRoomsByMember(t *testing.T) {
 	creator := createTestMemberForChat(t, memberRepo)
 
 	t.Run("list rooms for member with 2 rooms", func(t *testing.T) {
-		createTestRoom(t, chatRepo, memberRepo, &creator, nil)
-		createTestRoom(t, chatRepo, memberRepo, &creator, nil)
+		createTestRoom(t, chatRepo, memberRepo, &creator)
+		createTestRoom(t, chatRepo, memberRepo, &creator)
 
 		rooms, err := chatRepo.ListRoomsByMember(context.Background(), creator.ID)
 		assert.NoError(t, err)
@@ -129,7 +125,7 @@ func TestChatRoomRepositoryPGX_SendMessage(t *testing.T) {
 	chatRepo := database.NewChatRoomRepositoryPGX(testPool)
 
 	creator := createTestMemberForChat(t, memberRepo)
-	room := createTestRoom(t, chatRepo, memberRepo, &creator, nil)
+	room := createTestRoom(t, chatRepo, memberRepo, &creator)
 
 	t.Run("send message and verify fields", func(t *testing.T) {
 		msg := domain.ChatMessage{
@@ -150,7 +146,7 @@ func TestChatRoomRepositoryPGX_ListMessages(t *testing.T) {
 	chatRepo := database.NewChatRoomRepositoryPGX(testPool)
 
 	creator := createTestMemberForChat(t, memberRepo)
-	room := createTestRoom(t, chatRepo, memberRepo, &creator, nil)
+	room := createTestRoom(t, chatRepo, memberRepo, &creator)
 
 	t.Run("list messages returns messages in DESC order", func(t *testing.T) {
 		msg1 := domain.ChatMessage{
@@ -183,7 +179,7 @@ func TestChatRoomRepositoryPGX_DeleteMessage(t *testing.T) {
 	chatRepo := database.NewChatRoomRepositoryPGX(testPool)
 
 	creator := createTestMemberForChat(t, memberRepo)
-	room := createTestRoom(t, chatRepo, memberRepo, &creator, nil)
+	room := createTestRoom(t, chatRepo, memberRepo, &creator)
 
 	t.Run("delete existing message", func(t *testing.T) {
 		msg := domain.ChatMessage{
@@ -206,7 +202,9 @@ func TestChatRoomRepositoryPGX_MarkAsRead(t *testing.T) {
 
 	creator := createTestMemberForChat(t, memberRepo)
 	member2 := createTestMemberForChat(t, memberRepo)
-	room := createTestRoom(t, chatRepo, memberRepo, &creator, []string{member2.ID})
+	room := createTestRoom(t, chatRepo, memberRepo, &creator)
+	err := chatRepo.AddMembers(context.Background(), room.ID, []string{member2.ID})
+	require.NoError(t, err)
 
 	t.Run("mark message as read", func(t *testing.T) {
 		msg := domain.ChatMessage{
@@ -235,7 +233,9 @@ func TestChatRoomRepositoryPGX_CountUnread(t *testing.T) {
 
 	creator := createTestMemberForChat(t, memberRepo)
 	member2 := createTestMemberForChat(t, memberRepo)
-	room := createTestRoom(t, chatRepo, memberRepo, &creator, []string{member2.ID})
+	room := createTestRoom(t, chatRepo, memberRepo, &creator)
+	err := chatRepo.AddMembers(context.Background(), room.ID, []string{member2.ID})
+	require.NoError(t, err)
 
 	t.Run("unread count for other member", func(t *testing.T) {
 		msg := domain.ChatMessage{
@@ -262,7 +262,7 @@ func TestChatRoomRepositoryPGX_UpdateRoom(t *testing.T) {
 	chatRepo := database.NewChatRoomRepositoryPGX(testPool)
 
 	creator := createTestMemberForChat(t, memberRepo)
-	room := createTestRoom(t, chatRepo, memberRepo, &creator, nil)
+	room := createTestRoom(t, chatRepo, memberRepo, &creator)
 
 	t.Run("update room name", func(t *testing.T) {
 		err := chatRepo.UpdateRoom(context.Background(), room.ID, "Updated Room Name")
@@ -276,7 +276,7 @@ func TestChatRoomRepositoryPGX_DeleteRoom(t *testing.T) {
 	chatRepo := database.NewChatRoomRepositoryPGX(testPool)
 
 	creator := createTestMemberForChat(t, memberRepo)
-	room := createTestRoom(t, chatRepo, memberRepo, &creator, nil)
+	room := createTestRoom(t, chatRepo, memberRepo, &creator)
 
 	t.Run("delete existing room", func(t *testing.T) {
 		err := chatRepo.DeleteRoom(context.Background(), room.ID)
@@ -292,7 +292,9 @@ func TestChatRoomRepositoryPGX_AddMembers(t *testing.T) {
 	creator := createTestMemberForChat(t, memberRepo)
 	member2 := createTestMemberForChat(t, memberRepo)
 	member3 := createTestMemberForChat(t, memberRepo)
-	room := createTestRoom(t, chatRepo, memberRepo, &creator, []string{member2.ID})
+	room := createTestRoom(t, chatRepo, memberRepo, &creator)
+	err := chatRepo.AddMembers(context.Background(), room.ID, []string{member2.ID})
+	require.NoError(t, err)
 
 	t.Run("add member then list their rooms", func(t *testing.T) {
 		err := chatRepo.AddMembers(context.Background(), room.ID, []string{member3.ID})

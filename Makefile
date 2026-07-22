@@ -1,4 +1,4 @@
-.PHONY: db db-stop db-rm test test-integration
+.PHONY: db db-stop db-rm server server-stop test test-integration
 
 db:
 	docker compose up -d db
@@ -8,6 +8,12 @@ db-stop:
 
 db-rm:
 	docker compose down
+
+server:
+	export $$(grep -v '^#' dotenv.env | xargs) && go run .
+
+server-stop:
+	pkill -f "go run|./server" || true
 
 test:
 	go test -count=1 ./src/...

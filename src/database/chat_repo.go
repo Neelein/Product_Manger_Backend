@@ -20,26 +20,17 @@ func NewChatRoomRepositoryPGX(pool *pgxpool.Pool) *ChatRoomRepositoryPGX {
 	return &ChatRoomRepositoryPGX{pool: pool}
 }
 
-func (r *ChatRoomRepositoryPGX) CreateRoom(ctx context.Context, room *domain.ChatRoom, memberIDs []string) error {
-	err := r.pool.QueryRow(ctx, "SELECT * FROM create_chat_room($1, $2, $3)",
-		room.Name, room.Type, room.CreatedBy,
+func (r *ChatRoomRepositoryPGX) CreateRoom(ctx context.Context, room *domain.ChatRoom) error {
+	err := r.pool.QueryRow(ctx, "SELECT * FROM create_chat_room($1, $2)",
+		room.Name, room.CreatedBy,
 	).Scan(&room.ID, &room.CreatedAt, &room.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("creating chat room: %w", err)
 	}
 
-	allMemberIDs := []string{room.CreatedBy}
-	seen := map[string]bool{room.CreatedBy: true}
-	for _, id := range memberIDs {
-		if !seen[id] {
-			allMemberIDs = append(allMemberIDs, id)
-			seen[id] = true
-		}
-	}
-
-	_, err = r.pool.Exec(ctx, "SELECT * FROM add_chat_room_members($1, $2::uuid[])", room.ID, allMemberIDs)
+	_, err = r.pool.Exec(ctx, "SELECT * FROM add_chat_room_members($1, $2::uuid[])", room.ID, []string{room.CreatedBy})
 	if err != nil {
-		return fmt.Errorf("adding chat room members: %w", err)
+		return fmt.Errorf("adding creator to chat room: %w", err)
 	}
 
 	return nil
@@ -47,8 +38,7 @@ func (r *ChatRoomRepositoryPGX) CreateRoom(ctx context.Context, room *domain.Cha
 
 func (r *ChatRoomRepositoryPGX) GetRoomByID(ctx context.Context, roomID string, memberID string) (*domain.ChatRoomWithMeta, error) {
 	var cr domain.ChatRoomWithMeta
-	err := r.pool.QueryRow(ctx, "SELECT * FROM get_chat_room_by_id($1, $2)", roomID, memberID,
-	).Scan(&cr.ID, &cr.Name, &cr.Type, &cr.CreatedBy, &cr.CreatedAt, &cr.UpdatedAt, &cr.IsMember)
+	err := r.pool.QueryRow(ctx, "SELECT * FROM get_chat_room_by_id($1, $2)", roomID, memberID).Scan(&cr.ID, &cr.Name, &cr.CreatedBy, &cr.CreatedAt, &cr.UpdatedAt, &cr.IsMember)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrChatRoomNotFound
@@ -71,7 +61,7 @@ func (r *ChatRoomRepositoryPGX) ListRoomsByMember(ctx context.Context, memberID 
 		var lastMessageCreatedAt *time.Time
 
 		err := row.Scan(
-			&cr.ID, &cr.Name, &cr.Type, &cr.CreatedBy,
+			&cr.ID, &cr.Name, &cr.CreatedBy,
 			&cr.CreatedAt, &cr.UpdatedAt,
 			&lastMessageContent, &lastMessageSenderID, &lastMessageCreatedAt,
 			&cr.UnreadCount,
