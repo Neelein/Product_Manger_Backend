@@ -85,4 +85,5 @@ func RegisterChatRoutes(r *mux.Router, repo domain.ChatRoomRepository, memberRep
 	r.Handle("/api/chat/rooms/{roomId}/read", auth(http.HandlerFunc(h.MarkAsRead))).Methods("POST")
 	r.Handle("/api/chat/rooms/{roomId}/messages/{messageId}/read-by", auth(http.HandlerFunc(h.GetReadBy))).Methods("GET")
 	r.Handle("/api/chat/rooms/{roomId}/unread", auth(http.HandlerFunc(h.CountUnread))).Methods("GET")
+	r.Handle("/api/chat/rooms/{roomId}/available-members", auth(http.HandlerFunc(h.ListAvailableMembers))).Methods("POST")
 }

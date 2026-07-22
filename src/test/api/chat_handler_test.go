@@ -275,3 +275,60 @@ func TestChatHandler_MarkAsRead(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 }
+
+func cleanupMembersFull(t *testing.T) {
+	t.Helper()
+	_, _ = testPool.Exec(context.Background(), "TRUNCATE TABLE read_receipts, chat_messages, chat_room_members, chat_rooms CASCADE")
+	_, err := testPool.Exec(context.Background(), "DELETE FROM members WHERE id != '00000000-0000-0000-0000-000000000000'")
+	require.NoError(t, err)
+}
+
+func TestChatHandler_ListAvailableMembers(t *testing.T) {
+	defer cleanupChat(t)
+	chatRepo, memberRepo, sessionCache, handler := setupChatTest()
+
+	t.Run("list available members", func(t *testing.T) {
+		cleanupMembersFull(t)
+
+		member := createChatMember(t, memberRepo, sessionCache)
+		memberRepo.Create(context.Background(), &domain.Member{
+			Email:    "other1@" + uuid.New().String()[:8] + ".com",
+			Password: "pw",
+			Name:     "Other One",
+		})
+		memberRepo.Create(context.Background(), &domain.Member{
+			Email:    "other2@" + uuid.New().String()[:8] + ".com",
+			Password: "pw",
+			Name:     "Other Two",
+		})
+
+		room := domain.ChatRoom{Name: "Test", CreatedBy: member.ID}
+		require.NoError(t, chatRepo.CreateRoom(context.Background(), &room))
+
+		body, _ := json.Marshal(domain.RoomMembersRequest{})
+		req := httptest.NewRequest(http.MethodPost, "/api/chat/rooms/"+room.ID+"/available-members", bytes.NewReader(body))
+		req = mux.SetURLVars(req, map[string]string{"roomId": room.ID})
+		req = req.WithContext(api.ContextWithMember(req.Context(), member))
+		w := httptest.NewRecorder()
+		handler.ListAvailableMembers(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var resp domain.MembersListResponse
+		err := json.NewDecoder(w.Body).Decode(&resp)
+		require.NoError(t, err)
+		// System + Other1 + Other2 = 3 (member is in the room, excluded)
+		assert.Equal(t, 3, resp.Total)
+	})
+
+	t.Run("unauthorized", func(t *testing.T) {
+		cleanupChat(t)
+		body, _ := json.Marshal(domain.RoomMembersRequest{})
+		req := httptest.NewRequest(http.MethodPost, "/api/chat/rooms/some-room/available-members", bytes.NewReader(body))
+		req = mux.SetURLVars(req, map[string]string{"roomId": "some-room"})
+		w := httptest.NewRecorder()
+		handler.ListAvailableMembers(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+}

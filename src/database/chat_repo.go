@@ -230,3 +230,36 @@ func (r *ChatRoomRepositoryPGX) CountUnread(ctx context.Context, roomID string, 
 	}
 	return count, nil
 }
+
+type memberRow struct {
+	ID   string
+	Name string
+}
+
+func (r *ChatRoomRepositoryPGX) ListMembersNotInRoom(ctx context.Context, roomID string, limit int, offset int) ([]domain.Member, error) {
+	rows, err := r.pool.Query(ctx, "SELECT id, name FROM list_members_not_in_room($1, $2, $3)", roomID, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("listing members not in room: %w", err)
+	}
+	defer rows.Close()
+
+	rowsResult, err := pgx.CollectRows(rows, pgx.RowToAddrOfStructByName[memberRow])
+	if err != nil {
+		return nil, fmt.Errorf("collecting members: %w", err)
+	}
+
+	members := make([]domain.Member, len(rowsResult))
+	for i, r := range rowsResult {
+		members[i] = domain.Member{ID: r.ID, Name: r.Name}
+	}
+	return members, nil
+}
+
+func (r *ChatRoomRepositoryPGX) CountMembersNotInRoom(ctx context.Context, roomID string) (int, error) {
+	var count int
+	err := r.pool.QueryRow(ctx, "SELECT count_members_not_in_room($1)", roomID).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("counting members not in room: %w", err)
+	}
+	return count, nil
+}

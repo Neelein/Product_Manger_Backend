@@ -68,6 +68,7 @@ func runMigration(ctx context.Context, pool *pgxpool.Pool) {
 		"../../../db/migrations/008_create_announcements.up.sql",
 		"../../../db/migrations/009_set_not_null.up.sql",
 		"../../../db/migrations/010_create_chat.up.sql",
+		"../../../db/migrations/011_list_members.up.sql",
 	} {
 		schema, err := os.ReadFile(file)
 		if err != nil {

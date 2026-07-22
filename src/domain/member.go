@@ -45,3 +45,9 @@ type MemberResponse struct {
 	Email string `json:"email"`
 	Name  string `json:"name"`
 }
+
+type MembersListResponse struct {
+	Members []MemberResponse `json:"members"`
+	Total   int              `json:"total"`
+}
+
