@@ -355,3 +355,63 @@ func (h *ChatRoomHandler) CountUnread(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, domain.UnreadCountResponse{UnreadCount: count})
 }
+
+func (h *ChatRoomHandler) ListAvailableMembers(w http.ResponseWriter, r *http.Request) {
+	member := MemberFromContext(r.Context())
+	if member == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	roomID := mux.Vars(r)["roomId"]
+
+	var req domain.RoomMembersRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.Page == 0 {
+		req.Page = 1
+	}
+	if req.Limit == 0 {
+		req.Limit = 20
+	}
+
+	if req.Page < 1 {
+		writeError(w, http.StatusBadRequest, "invalid page parameter")
+		return
+	}
+	if req.Limit < 1 || req.Limit > 100 {
+		writeError(w, http.StatusBadRequest, "invalid limit parameter")
+		return
+	}
+
+	offset := (req.Page - 1) * req.Limit
+
+	members, err := h.repo.ListMembersNotInRoom(r.Context(), roomID, req.Limit, offset)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	total, err := h.repo.CountMembersNotInRoom(r.Context(), roomID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	memberResponses := make([]domain.MemberResponse, len(members))
+	for i, m := range members {
+		memberResponses[i] = domain.MemberResponse{
+			ID:    m.ID,
+			Email: m.Email,
+			Name:  m.Name,
+		}
+	}
+
+	writeJSON(w, http.StatusOK, domain.MembersListResponse{
+		Members: memberResponses,
+		Total:   total,
+	})
+}

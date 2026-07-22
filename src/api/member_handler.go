@@ -198,5 +198,3 @@ func (h *MemberHandler) GetCurrentMember(w http.ResponseWriter, r *http.Request)
 		Name:  member.Name,
 	})
 }
-
-

@@ -70,4 +70,7 @@ type ChatRoomRepository interface {
 	MarkAsRead(ctx context.Context, messageID string, memberID string) error
 	GetReadBy(ctx context.Context, messageID string) ([]ReadReceipt, error)
 	CountUnread(ctx context.Context, roomID string, memberID string) (int64, error)
+
+	ListMembersNotInRoom(ctx context.Context, roomID string, limit int, offset int) ([]Member, error)
+	CountMembersNotInRoom(ctx context.Context, roomID string) (int, error)
 }

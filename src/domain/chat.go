@@ -80,3 +80,9 @@ type ReadByResponse struct {
 type UnreadCountResponse struct {
 	UnreadCount int64 `json:"unread_count"`
 }
+
+type RoomMembersRequest struct {
+	RoomID string `json:"room_id"`
+	Page   int    `json:"page"`
+	Limit  int    `json:"limit"`
+}

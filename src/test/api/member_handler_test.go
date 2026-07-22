@@ -28,6 +28,7 @@ func setupMemberHandler() (*database.MemberRepositoryPGX, *database.SessionCache
 
 func cleanupMembers(t *testing.T) {
 	t.Helper()
+	_, _ = testPool.Exec(context.Background(), "TRUNCATE TABLE read_receipts, chat_messages, chat_room_members, chat_rooms CASCADE")
 	_, err := testPool.Exec(context.Background(), "DELETE FROM members WHERE id != '00000000-0000-0000-0000-000000000000'")
 	require.NoError(t, err)
 }
@@ -350,6 +351,7 @@ func TestHandler_DeviceMismatch(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "device mismatch", resp.Error)
 }
+
 
 func TestHandler_Logout(t *testing.T) {
 	defer cleanupMembers(t)
