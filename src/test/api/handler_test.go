@@ -71,7 +71,6 @@ func runMigration(ctx context.Context, pool *pgxpool.Pool) {
 		"../../../db/migrations/011_list_members.up.sql",
 		"../../../db/migrations/012_create_events.up.sql",
 		"../../../db/migrations/013_add_monthly_filters.up.sql",
-		"../../../db/migrations/014_simplify_chat_room_monthly_function.up.sql",
 	} {
 		schema, err := os.ReadFile(file)
 		if err != nil {
