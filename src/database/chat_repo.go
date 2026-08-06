@@ -91,6 +91,31 @@ func (r *ChatRoomRepositoryPGX) ListRoomsByMember(ctx context.Context, memberID 
 	return rooms, nil
 }
 
+func (r *ChatRoomRepositoryPGX) ListRoomsByMemberByMonth(ctx context.Context, memberID string, year, month int) ([]domain.ChatRoomWithMeta, error) {
+	rows, err := r.pool.Query(ctx, "SELECT * FROM list_chat_rooms_by_member_by_month($1, $2, $3)", memberID, year, month)
+	if err != nil {
+		return nil, fmt.Errorf("listing chat rooms by member by month: %w", err)
+	}
+
+	rooms, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.ChatRoomWithMeta, error) {
+		var cr domain.ChatRoomWithMeta
+		err := row.Scan(
+			&cr.ID, &cr.Name, &cr.CreatedBy,
+			&cr.CreatedAt, &cr.UpdatedAt,
+		)
+		return cr, err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("listing chat rooms by member by month: %w", err)
+	}
+
+	if rooms == nil {
+		rooms = []domain.ChatRoomWithMeta{}
+	}
+
+	return rooms, nil
+}
+
 func (r *ChatRoomRepositoryPGX) UpdateRoom(ctx context.Context, roomID string, name string) error {
 	var updatedAt time.Time
 	err := r.pool.QueryRow(ctx, "SELECT * FROM update_chat_room($1, $2)", roomID, name).Scan(&updatedAt)

@@ -67,6 +67,33 @@ func (h *ChatRoomHandler) ListRooms(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	yearStr := r.URL.Query().Get("year")
+	monthStr := r.URL.Query().Get("month")
+
+	// If year and month are provided, filter by month
+	if yearStr != "" && monthStr != "" {
+		year, err := strconv.Atoi(yearStr)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid year")
+			return
+		}
+
+		month, err := strconv.Atoi(monthStr)
+		if err != nil || month < 1 || month > 12 {
+			writeError(w, http.StatusBadRequest, "invalid month")
+			return
+		}
+
+		rooms, err := h.repo.ListRoomsByMemberByMonth(context.Background(), member.ID, year, month)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		writeJSON(w, http.StatusOK, domain.RoomListResponse{Rooms: rooms})
+		return
+	}
+
 	rooms, err := h.repo.ListRoomsByMember(context.Background(), member.ID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

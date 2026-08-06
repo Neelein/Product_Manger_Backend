@@ -75,6 +75,7 @@ func main() {
 	api.RegisterMemberRoutes(r, memberRepo, sessionRepo)
 	api.RegisterAnnouncementRoutes(r, database.NewAnnouncementRepositoryPGX(pool), memberRepo, sessionRepo)
 	api.RegisterChatRoutes(r, database.NewChatRoomRepositoryPGX(pool), memberRepo, sessionRepo)
+	api.RegisterEventRoutes(r, database.NewEventRepositoryPGX(pool), memberRepo, sessionRepo)
 
 	log.Println("Server starting on :8090")
 	log.Fatal(http.ListenAndServe(":8090", r))
