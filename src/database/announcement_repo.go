@@ -70,6 +70,34 @@ func (r *AnnouncementRepositoryPGX) List(ctx context.Context, limit, offset int)
 	return announcements, total, nil
 }
 
+func (r *AnnouncementRepositoryPGX) ListByMonth(ctx context.Context, year, month, limit, offset int) ([]domain.Announcement, int, error) {
+	rows, err := r.pool.Query(ctx, "SELECT * FROM list_announcements_by_month($1, $2, $3, $4)", year, month, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("listing announcements by month: %w", err)
+	}
+
+	announcements, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.Announcement, error) {
+		var a domain.Announcement
+		err := row.Scan(&a.ID, &a.Title, &a.Content, &a.ImagePath, &a.PublisherID, &a.PublisherName, &a.CreatedAt, &a.UpdatedAt)
+		return a, err
+	})
+	if err != nil {
+		return nil, 0, fmt.Errorf("listing announcements by month: %w", err)
+	}
+
+	if announcements == nil {
+		announcements = []domain.Announcement{}
+	}
+
+	var total int
+	err = r.pool.QueryRow(ctx, "SELECT * FROM count_announcements_by_month($1, $2)", year, month).Scan(&total)
+	if err != nil {
+		return nil, 0, fmt.Errorf("counting announcements by month: %w", err)
+	}
+
+	return announcements, total, nil
+}
+
 func (r *AnnouncementRepositoryPGX) Update(ctx context.Context, announcement *domain.Announcement) error {
 	err := r.pool.QueryRow(ctx, "SELECT * FROM update_announcement($1, $2, $3, $4)",
 		announcement.ID, announcement.Title, announcement.Content, announcement.ImagePath,

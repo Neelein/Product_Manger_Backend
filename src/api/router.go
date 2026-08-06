@@ -87,3 +87,17 @@ func RegisterChatRoutes(r *mux.Router, repo domain.ChatRoomRepository, memberRep
 	r.Handle("/api/chat/rooms/{roomId}/unread", auth(http.HandlerFunc(h.CountUnread))).Methods("GET")
 	r.Handle("/api/chat/rooms/{roomId}/available-members", auth(http.HandlerFunc(h.ListAvailableMembers))).Methods("POST")
 }
+
+func RegisterEventRoutes(r *mux.Router, repo domain.EventRepository, memberRepo domain.MemberRepository, sessionRepo domain.SessionRepository) {
+	h := NewEventHandler(repo)
+	auth := AuthMiddleware(sessionRepo, memberRepo)
+
+	r.Handle("/api/events", auth(http.HandlerFunc(h.ListEventsByMonth))).Methods("GET")
+	r.Handle("/api/events", auth(http.HandlerFunc(h.CreateEvent))).Methods("POST")
+	r.Handle("/api/events/{eventId}", auth(http.HandlerFunc(h.GetEvent))).Methods("GET")
+	r.Handle("/api/events/{eventId}/update", auth(http.HandlerFunc(h.UpdateEvent))).Methods("POST")
+	r.Handle("/api/events/{eventId}/delete", auth(http.HandlerFunc(h.DeleteEvent))).Methods("POST")
+	r.Handle("/api/events/{eventId}/viewers", auth(http.HandlerFunc(h.AddViewer))).Methods("POST")
+	r.Handle("/api/events/{eventId}/viewers/{memberId}/remove", auth(http.HandlerFunc(h.RemoveViewer))).Methods("POST")
+	r.Handle("/api/events/{eventId}/viewers", auth(http.HandlerFunc(h.ListViewers))).Methods("GET")
+}

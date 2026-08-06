@@ -50,10 +50,10 @@ func TestMain(m *testing.M) {
 }
 
 func dropTables(ctx context.Context, pool *pgxpool.Pool) {
-	for _, table := range []string{"read_receipts", "chat_messages", "chat_room_members", "chat_rooms", "announcements", "inventory_items", "inventories", "members", "product_prices", "product_details", "products"} {
+	for _, table := range []string{"read_receipts", "chat_messages", "chat_room_members", "chat_rooms", "announcements", "inventory_items", "inventories", "members", "product_prices", "product_details", "products", "event_viewers", "events"} {
 		_, _ = pool.Exec(ctx, "DROP TABLE IF EXISTS "+table+" CASCADE")
 	}
-	_, _ = pool.Exec(ctx, "DROP FUNCTION IF EXISTS create_member, get_member_by_email, get_member_by_id, update_member, create_product, list_products, get_product_by_id, update_product, delete_product, create_product_detail, get_product_detail_by_product, update_product_detail, create_product_price, get_product_price_by_id, list_product_prices_by_detail, update_product_price, create_inventory, get_inventory_by_id, get_inventory_by_price_id, list_inventories, update_inventory, delete_inventory, create_inventory_item, get_inventory_item_by_id, list_inventory_items, update_inventory_item, delete_inventory_item, create_announcement, get_announcement_by_id, list_announcements, count_announcements, update_announcement, delete_announcement, create_chat_room, add_chat_room_members, get_chat_room_by_id, list_chat_rooms_by_member, update_chat_room, delete_chat_room, remove_chat_room_member, send_message, list_messages, delete_message, mark_message_read, get_message_read_by, count_room_unread CASCADE")
+	_, _ = pool.Exec(ctx, "DROP FUNCTION IF EXISTS create_member, get_member_by_email, get_member_by_id, update_member, create_product, list_products, get_product_by_id, update_product, delete_product, create_product_detail, get_product_detail_by_product, update_product_detail, create_product_price, get_product_price_by_id, list_product_prices_by_detail, update_product_price, create_inventory, get_inventory_by_id, get_inventory_by_price_id, list_inventories, update_inventory, delete_inventory, create_inventory_item, get_inventory_item_by_id, list_inventory_items, update_inventory_item, delete_inventory_item, create_announcement, get_announcement_by_id, list_announcements, count_announcements, update_announcement, delete_announcement, create_chat_room, add_chat_room_members, get_chat_room_by_id, list_chat_rooms_by_member, update_chat_room, delete_chat_room, remove_chat_room_member, send_message, list_messages, delete_message, mark_message_read, get_message_read_by, count_room_unread, create_event, get_event_by_id, list_events_by_month, update_event, delete_event, add_event_viewer, remove_event_viewer, list_event_viewers, list_announcements_by_month, count_announcements_by_month, list_chat_rooms_by_member_by_month CASCADE")
 }
 
 func runMigration(ctx context.Context, pool *pgxpool.Pool) {
@@ -69,6 +69,9 @@ func runMigration(ctx context.Context, pool *pgxpool.Pool) {
 		"../../../db/migrations/009_set_not_null.up.sql",
 		"../../../db/migrations/010_create_chat.up.sql",
 		"../../../db/migrations/011_list_members.up.sql",
+		"../../../db/migrations/012_create_events.up.sql",
+		"../../../db/migrations/013_add_monthly_filters.up.sql",
+		"../../../db/migrations/014_simplify_chat_room_monthly_function.up.sql",
 	} {
 		schema, err := os.ReadFile(file)
 		if err != nil {

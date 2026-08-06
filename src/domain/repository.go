@@ -50,14 +50,27 @@ type AnnouncementRepository interface {
 	Create(ctx context.Context, announcement *Announcement) error
 	GetByID(ctx context.Context, id string) (*Announcement, error)
 	List(ctx context.Context, limit, offset int) ([]Announcement, int, error)
+	ListByMonth(ctx context.Context, year, month, limit, offset int) ([]Announcement, int, error)
 	Update(ctx context.Context, announcement *Announcement) error
 	Delete(ctx context.Context, id string) error
+}
+
+type EventRepository interface {
+	Create(ctx context.Context, event *Event) error
+	GetByID(ctx context.Context, id string, memberID string) (*Event, error)
+	ListByMonth(ctx context.Context, year, month int, memberID string) ([]Event, error)
+	Update(ctx context.Context, event *Event) error
+	Delete(ctx context.Context, id string) error
+	AddViewer(ctx context.Context, eventID string, memberID string) error
+	RemoveViewer(ctx context.Context, eventID string, memberID string) error
+	ListViewers(ctx context.Context, eventID string) ([]EventViewer, error)
 }
 
 type ChatRoomRepository interface {
 	CreateRoom(ctx context.Context, room *ChatRoom) error
 	GetRoomByID(ctx context.Context, roomID string, memberID string) (*ChatRoomWithMeta, error)
 	ListRoomsByMember(ctx context.Context, memberID string) ([]ChatRoomWithMeta, error)
+	ListRoomsByMemberByMonth(ctx context.Context, memberID string, year, month int) ([]ChatRoomWithMeta, error)
 	UpdateRoom(ctx context.Context, roomID string, name string) error
 	DeleteRoom(ctx context.Context, roomID string) error
 	AddMembers(ctx context.Context, roomID string, memberIDs []string) error

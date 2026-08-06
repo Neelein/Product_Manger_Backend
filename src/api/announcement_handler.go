@@ -98,6 +98,8 @@ func (h *AnnouncementHandler) CreateAnnouncement(w http.ResponseWriter, r *http.
 func (h *AnnouncementHandler) ListAnnouncements(w http.ResponseWriter, r *http.Request) {
 	pageStr := r.URL.Query().Get("page")
 	limitStr := r.URL.Query().Get("limit")
+	yearStr := r.URL.Query().Get("year")
+	monthStr := r.URL.Query().Get("month")
 
 	page := 1
 	limit := 20
@@ -114,6 +116,35 @@ func (h *AnnouncementHandler) ListAnnouncements(w http.ResponseWriter, r *http.R
 	}
 
 	offset := (page - 1) * limit
+
+	// If year and month are provided, filter by month
+	if yearStr != "" && monthStr != "" {
+		year, err := strconv.Atoi(yearStr)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid year")
+			return
+		}
+
+		month, err := strconv.Atoi(monthStr)
+		if err != nil || month < 1 || month > 12 {
+			writeError(w, http.StatusBadRequest, "invalid month")
+			return
+		}
+
+		announcements, total, err := h.repo.ListByMonth(context.Background(), year, month, limit, offset)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		writeJSON(w, http.StatusOK, domain.AnnouncementListResponse{
+			Announcements: announcements,
+			Total:         total,
+			Page:          page,
+			Limit:         limit,
+		})
+		return
+	}
 
 	announcements, total, err := h.repo.List(context.Background(), limit, offset)
 	if err != nil {
