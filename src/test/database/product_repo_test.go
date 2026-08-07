@@ -4,13 +4,16 @@ package database_test
 
 import (
 	"context"
+	"net/url"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"backend/src/database"
 	"backend/src/domain"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,11 +24,17 @@ var testPool *pgxpool.Pool
 func TestMain(m *testing.M) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	if databaseURL == "" {
-		databaseURL = "postgres://root:root123@localhost:5432/productdb_test?sslmode=disable"
+		databaseURL = "postgres://root:root123@localhost:5432/productdb_database_test?sslmode=disable"
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
+
+	u, err := url.Parse(databaseURL)
+	if err != nil {
+		panic("failed to parse test database URL: " + err.Error())
+	}
+	ensureTestDatabase(ctx, u)
 
 	pool, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {
@@ -41,6 +50,34 @@ func TestMain(m *testing.M) {
 
 	pool.Close()
 	os.Exit(code)
+}
+
+func ensureTestDatabase(ctx context.Context, u *url.URL) {
+	dbName := strings.TrimPrefix(u.Path, "/")
+	adminURL := *u
+	adminURL.Path = "/postgres"
+
+	adminPool, err := pgxpool.New(ctx, adminURL.String())
+	if err != nil {
+		panic("failed to connect to admin database: " + err.Error())
+	}
+	defer adminPool.Close()
+
+	var exists bool
+	err = adminPool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)", dbName).Scan(&exists)
+	if err != nil {
+		panic("failed to check if test database exists: " + err.Error())
+	}
+
+	if exists {
+		return
+	}
+
+	quoted := pgx.Identifier{dbName}.Sanitize()
+	_, err = adminPool.Exec(ctx, "CREATE DATABASE "+quoted)
+	if err != nil {
+		panic("failed to create test database: " + err.Error())
+	}
 }
 
 func dropTables(ctx context.Context, pool *pgxpool.Pool) {
