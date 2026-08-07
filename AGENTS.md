@@ -1,6 +1,7 @@
 ## Agent rules
 
 - **Every change must have tests.** No code is merged without corresponding tests.
+- **Backend changes must pass E2E tests.** Any backend change that alters user-facing behavior (API, auth, session, media) must be validated with the Playwright E2E suite before merge. Run locally via `frontend/scripts/start-backend.sh` + `npx playwright test`, or rely on the `.github/workflows/e2e.yml` CI workflow.
 - **Do not design or decide alone.** Every design decision must be discussed with me first.
 - **Code format must follow the skill.** Load the relevant skill (e.g. `golang-code-style`, `golang-testing`) before writing or reviewing code.
 - **Do not write production code.** Use a sub agent (Task tool) to generate all code. You only review and orchestrate.
