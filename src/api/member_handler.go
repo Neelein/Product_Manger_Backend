@@ -22,15 +22,18 @@ func memberFromRequest(r *http.Request) *domain.Member {
 type MemberHandler struct {
 	memberRepo  domain.MemberRepository
 	sessionRepo domain.SessionRepository
+	codeRepo    domain.RegistrationCodeRepository
 }
 
 func NewMemberHandler(
 	memberRepo domain.MemberRepository,
 	sessionRepo domain.SessionRepository,
+	codeRepo domain.RegistrationCodeRepository,
 ) *MemberHandler {
 	return &MemberHandler{
 		memberRepo:  memberRepo,
 		sessionRepo: sessionRepo,
+		codeRepo:    codeRepo,
 	}
 }
 
@@ -38,6 +41,11 @@ func (h *MemberHandler) RegisterMember(w http.ResponseWriter, r *http.Request) {
 	var req domain.RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.Code == "" {
+		writeError(w, http.StatusBadRequest, "registration code is required")
 		return
 	}
 
@@ -53,12 +61,17 @@ func (h *MemberHandler) RegisterMember(w http.ResponseWriter, r *http.Request) {
 		Name:     req.Name,
 	}
 
-	if err := h.memberRepo.Create(context.Background(), &member); err != nil {
-		if errors.Is(err, domain.ErrEmailAlreadyExists) {
+	if err := h.codeRepo.RegisterMemberWithCode(context.Background(), &member, req.Code); err != nil {
+		switch {
+		case errors.Is(err, domain.ErrEmailAlreadyExists):
 			writeError(w, http.StatusConflict, "email already exists")
-			return
+		case errors.Is(err, domain.ErrInvalidRegistrationCode):
+			writeError(w, http.StatusBadRequest, "invalid registration code")
+		case errors.Is(err, domain.ErrRegistrationCodeUsed):
+			writeError(w, http.StatusBadRequest, "registration code already used")
+		default:
+			writeError(w, http.StatusInternalServerError, err.Error())
 		}
-		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -66,6 +79,7 @@ func (h *MemberHandler) RegisterMember(w http.ResponseWriter, r *http.Request) {
 		ID:    member.ID,
 		Email: member.Email,
 		Name:  member.Name,
+		Role:  member.Role,
 	})
 }
 
@@ -106,6 +120,7 @@ func (h *MemberHandler) LoginMember(w http.ResponseWriter, r *http.Request) {
 			ID:    member.ID,
 			Email: member.Email,
 			Name:  member.Name,
+			Role:  member.Role,
 		},
 	})
 }
@@ -165,6 +180,7 @@ func (h *MemberHandler) UpdateMember(w http.ResponseWriter, r *http.Request) {
 		ID:    member.ID,
 		Email: member.Email,
 		Name:  member.Name,
+		Role:  member.Role,
 	})
 }
 
@@ -179,5 +195,6 @@ func (h *MemberHandler) GetCurrentMember(w http.ResponseWriter, r *http.Request)
 		ID:    member.ID,
 		Email: member.Email,
 		Name:  member.Name,
+		Role:  member.Role,
 	})
 }

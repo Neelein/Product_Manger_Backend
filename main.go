@@ -62,6 +62,7 @@ func main() {
 	repo := database.NewProductRepositoryPGX(pool)
 	inventoryRepo := database.NewInventoryRepositoryPGX(pool)
 	memberRepo := database.NewMemberRepositoryPGX(pool)
+	codeRepo := database.NewRegistrationCodeRepositoryPGX(pool)
 	sessionRepo := database.NewSessionCache(time.Hour)
 	defer sessionRepo.Stop()
 
@@ -72,7 +73,8 @@ func main() {
 
 	api.RegisterProductRoutes(r, repo, memberRepo, sessionRepo)
 	api.RegisterInventoryRoutes(r, inventoryRepo, memberRepo, sessionRepo)
-	api.RegisterMemberRoutes(r, memberRepo, sessionRepo)
+	api.RegisterMemberRoutes(r, memberRepo, sessionRepo, codeRepo)
+	api.RegisterRegistrationCodeRoutes(r, codeRepo, memberRepo, sessionRepo)
 	api.RegisterAnnouncementRoutes(r, database.NewAnnouncementRepositoryPGX(pool), memberRepo, sessionRepo)
 	api.RegisterChatRoutes(r, database.NewChatRoomRepositoryPGX(pool), memberRepo, sessionRepo)
 	api.RegisterEventRoutes(r, database.NewEventRepositoryPGX(pool), memberRepo, sessionRepo)

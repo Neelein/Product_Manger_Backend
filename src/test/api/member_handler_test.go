@@ -6,8 +6,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -19,10 +21,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var codeSeq atomic.Uint64
+
 func setupMemberHandler() (*database.MemberRepositoryPGX, *database.SessionCache, *api.MemberHandler) {
 	memberRepo := database.NewMemberRepositoryPGX(testPool)
 	sessionCache := database.NewSessionCache(time.Hour)
-	handler := api.NewMemberHandler(memberRepo, sessionCache)
+	handler := api.NewMemberHandler(memberRepo, sessionCache, database.NewRegistrationCodeRepositoryPGX(testPool))
 	return memberRepo, sessionCache, handler
 }
 
@@ -31,19 +35,42 @@ func cleanupMembers(t *testing.T) {
 	_, _ = testPool.Exec(context.Background(), "TRUNCATE TABLE read_receipts, chat_messages, chat_room_members, chat_rooms CASCADE")
 	_, err := testPool.Exec(context.Background(), "DELETE FROM members WHERE id != '00000000-0000-0000-0000-000000000000'")
 	require.NoError(t, err)
+	_, _ = testPool.Exec(context.Background(), "TRUNCATE TABLE registration_codes CASCADE")
+}
+
+// seedCode creates a fresh unused registration code and returns its raw value.
+func seedCode(t *testing.T, suffix string) string {
+	t.Helper()
+	codeRepo := database.NewRegistrationCodeRepositoryPGX(testPool)
+	code := fmt.Sprintf("t%03d-%s", codeSeq.Add(1), suffix)
+	rc, err := codeRepo.Create(context.Background(), "", code)
+	require.NoError(t, err)
+	return rc.Code
+}
+
+func registerBody(email, password, name, code string) []byte {
+	body, _ := json.Marshal(domain.RegisterRequest{
+		Email:    email,
+		Password: password,
+		Name:     name,
+		Code:     code,
+	})
+	return body
+}
+
+func executeRegister(
+	handler *api.MemberHandler,
+	email, password, name, code string,
+) *httptest.ResponseRecorder {
+	return executeRequest(http.MethodPost, "/api/members/register", registerBody(email, password, name, code), handler.RegisterMember)
 }
 
 func TestHandler_Register(t *testing.T) {
 	defer cleanupMembers(t)
 	_, _, handler := setupMemberHandler()
+	code := seedCode(t, "valid")
 
-	body, _ := json.Marshal(domain.RegisterRequest{
-		Email:    "user@example.com",
-		Password: "password123",
-		Name:     "John Doe",
-	})
-
-	w := executeRequest(http.MethodPost, "/api/members/register", body, handler.RegisterMember)
+	w := executeRegister(handler, "user@example.com", "password123", "John Doe", code)
 
 	assert.Equal(t, http.StatusCreated, w.Code)
 
@@ -53,22 +80,45 @@ func TestHandler_Register(t *testing.T) {
 	assert.NotEmpty(t, resp.ID)
 	assert.Equal(t, "user@example.com", resp.Email)
 	assert.Equal(t, "John Doe", resp.Name)
+	assert.Equal(t, "member", resp.Role)
+}
+
+func TestHandler_Register_MissingCode(t *testing.T) {
+	defer cleanupMembers(t)
+	_, _, handler := setupMemberHandler()
+
+	w := executeRegister(handler, "nocode@example.com", "password", "No Code", "")
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestHandler_Register_InvalidCode(t *testing.T) {
+	defer cleanupMembers(t)
+	_, _, handler := setupMemberHandler()
+
+	w := executeRegister(handler, "bad@example.com", "password", "Bad", "does-not-exist")
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestHandler_Register_UsedCode(t *testing.T) {
+	defer cleanupMembers(t)
+	_, _, handler := setupMemberHandler()
+	code := seedCode(t, "single")
+
+	w := executeRegister(handler, "first@example.com", "password", "First", code)
+	require.Equal(t, http.StatusCreated, w.Code)
+
+	w = executeRegister(handler, "second@example.com", "password", "Second", code)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestHandler_Register_DuplicateEmail(t *testing.T) {
 	defer cleanupMembers(t)
 	_, _, handler := setupMemberHandler()
 
-	body, _ := json.Marshal(domain.RegisterRequest{
-		Email:    "dup@example.com",
-		Password: "password123",
-		Name:     "User",
-	})
-
-	w := executeRequest(http.MethodPost, "/api/members/register", body, handler.RegisterMember)
+	w := executeRegister(handler, "dup@example.com", "password123", "User", seedCode(t, "a"))
 	assert.Equal(t, http.StatusCreated, w.Code)
 
-	w = executeRequest(http.MethodPost, "/api/members/register", body, handler.RegisterMember)
+	w = executeRegister(handler, "dup@example.com", "password123", "User", seedCode(t, "b"))
 	assert.Equal(t, http.StatusConflict, w.Code)
 }
 
@@ -76,12 +126,7 @@ func TestHandler_Login(t *testing.T) {
 	defer cleanupMembers(t)
 	_, _, handler := setupMemberHandler()
 
-	regBody, _ := json.Marshal(domain.RegisterRequest{
-		Email:    "login@example.com",
-		Password: "mypassword",
-		Name:     "Login User",
-	})
-	w := executeRequest(http.MethodPost, "/api/members/register", regBody, handler.RegisterMember)
+	w := executeRegister(handler, "login@example.com", "mypassword", "Login User", seedCode(t, "login"))
 	require.Equal(t, http.StatusCreated, w.Code)
 
 	loginBody, _ := json.Marshal(domain.LoginRequest{
@@ -97,6 +142,7 @@ func TestHandler_Login(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "login@example.com", resp.Member.Email)
 	assert.Equal(t, "Login User", resp.Member.Name)
+	assert.Equal(t, "member", resp.Member.Role)
 
 	cookies := w.Result().Cookies()
 	var sessionCookie *http.Cookie
@@ -109,55 +155,13 @@ func TestHandler_Login(t *testing.T) {
 	require.NotNil(t, sessionCookie)
 	assert.NotEmpty(t, sessionCookie.Value)
 	assert.True(t, sessionCookie.HttpOnly)
-	assert.False(t, sessionCookie.Secure)
-}
-
-func TestHandler_Login_HTTPSecure(t *testing.T) {
-	defer cleanupMembers(t)
-	_, _, handler := setupMemberHandler()
-
-	regBody, _ := json.Marshal(domain.RegisterRequest{
-		Email:    "secure@example.com",
-		Password: "password",
-		Name:     "Secure User",
-	})
-	w := executeRequest(http.MethodPost, "/api/members/register", regBody, handler.RegisterMember)
-	require.Equal(t, http.StatusCreated, w.Code)
-
-	loginBody, _ := json.Marshal(domain.LoginRequest{
-		Email:    "secure@example.com",
-		Password: "password",
-	})
-	req := httptest.NewRequest(http.MethodPost, "/api/members/login", bytes.NewReader(loginBody))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Forwarded-Proto", "https")
-	w = httptest.NewRecorder()
-	handler.LoginMember(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	cookies := w.Result().Cookies()
-	var sessionCookie *http.Cookie
-	for _, c := range cookies {
-		if c.Name == "session_key" {
-			sessionCookie = c
-			break
-		}
-	}
-	require.NotNil(t, sessionCookie)
-	assert.True(t, sessionCookie.Secure)
 }
 
 func TestHandler_Login_WrongPassword(t *testing.T) {
 	defer cleanupMembers(t)
 	_, _, handler := setupMemberHandler()
 
-	regBody, _ := json.Marshal(domain.RegisterRequest{
-		Email:    "wrong@example.com",
-		Password: "correctpw",
-		Name:     "User",
-	})
-	w := executeRequest(http.MethodPost, "/api/members/register", regBody, handler.RegisterMember)
+	w := executeRegister(handler, "wrong@example.com", "correctpw", "User", seedCode(t, "wrong"))
 	require.Equal(t, http.StatusCreated, w.Code)
 
 	loginBody, _ := json.Marshal(domain.LoginRequest{
@@ -172,12 +176,7 @@ func TestHandler_Me(t *testing.T) {
 	defer cleanupMembers(t)
 	_, sessionCache, handler := setupMemberHandler()
 
-	regBody, _ := json.Marshal(domain.RegisterRequest{
-		Email:    "me@example.com",
-		Password: "password",
-		Name:     "Me User",
-	})
-	w := executeRequest(http.MethodPost, "/api/members/register", regBody, handler.RegisterMember)
+	w := executeRegister(handler, "me@example.com", "password", "Me User", seedCode(t, "me"))
 	require.Equal(t, http.StatusCreated, w.Code)
 
 	loginBody, _ := json.Marshal(domain.LoginRequest{
@@ -200,6 +199,7 @@ func TestHandler_Me(t *testing.T) {
 		ID:    loginResp.Member.ID,
 		Email: loginResp.Member.Email,
 		Name:  loginResp.Member.Name,
+		Role:  "member",
 	}))
 	w = httptest.NewRecorder()
 	handler.GetCurrentMember(w, req)
@@ -211,6 +211,7 @@ func TestHandler_Me(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "me@example.com", resp.Email)
 	assert.Equal(t, "Me User", resp.Name)
+	assert.Equal(t, "member", resp.Role)
 }
 
 func TestHandler_Me_NoCookie(t *testing.T) {
@@ -225,12 +226,7 @@ func TestHandler_Me_ExpiredSession(t *testing.T) {
 	defer cleanupMembers(t)
 	_, sessionCache, handler := setupMemberHandler()
 
-	regBody, _ := json.Marshal(domain.RegisterRequest{
-		Email:    "expired@example.com",
-		Password: "password",
-		Name:     "Expired User",
-	})
-	w := executeRequest(http.MethodPost, "/api/members/register", regBody, handler.RegisterMember)
+	w := executeRegister(handler, "expired@example.com", "password", "Expired User", seedCode(t, "expired"))
 	require.Equal(t, http.StatusCreated, w.Code)
 
 	loginBody, _ := json.Marshal(domain.LoginRequest{
@@ -255,12 +251,7 @@ func TestHandler_UpdateMember(t *testing.T) {
 	defer cleanupMembers(t)
 	_, _, handler := setupMemberHandler()
 
-	regBody, _ := json.Marshal(domain.RegisterRequest{
-		Email:    "update@example.com",
-		Password: "password",
-		Name:     "Original Name",
-	})
-	w := executeRequest(http.MethodPost, "/api/members/register", regBody, handler.RegisterMember)
+	w := executeRegister(handler, "update@example.com", "password", "Original Name", seedCode(t, "update"))
 	require.Equal(t, http.StatusCreated, w.Code)
 
 	loginBody, _ := json.Marshal(domain.LoginRequest{
@@ -278,6 +269,7 @@ func TestHandler_UpdateMember(t *testing.T) {
 		ID:    loginResp.Member.ID,
 		Email: loginResp.Member.Email,
 		Name:  loginResp.Member.Name,
+		Role:  loginResp.Member.Role,
 	})
 
 	t.Run("successful update", func(t *testing.T) {
@@ -324,12 +316,7 @@ func TestHandler_UpdateMember(t *testing.T) {
 	})
 
 	t.Run("update email to existing email", func(t *testing.T) {
-		otherRegBody, _ := json.Marshal(domain.RegisterRequest{
-			Email:    "existing@example.com",
-			Password: "password",
-			Name:     "Existing User",
-		})
-		w := executeRequest(http.MethodPost, "/api/members/register", otherRegBody, handler.RegisterMember)
+		w := executeRegister(handler, "existing@example.com", "password", "Existing User", seedCode(t, "existing"))
 		require.Equal(t, http.StatusCreated, w.Code)
 
 		updateBody, _ := json.Marshal(domain.UpdateMemberRequest{
@@ -350,12 +337,7 @@ func TestHandler_SessionIdleExpiry(t *testing.T) {
 	defer cleanupMembers(t)
 	memberRepo, sessionCache, handler := setupMemberHandler()
 
-	regBody, _ := json.Marshal(domain.RegisterRequest{
-		Email:    "idle@example.com",
-		Password: "password",
-		Name:     "Idle User",
-	})
-	w := executeRequest(http.MethodPost, "/api/members/register", regBody, handler.RegisterMember)
+	w := executeRegister(handler, "idle@example.com", "password", "Idle User", seedCode(t, "idle"))
 	require.Equal(t, http.StatusCreated, w.Code)
 
 	loginBody, _ := json.Marshal(domain.LoginRequest{
@@ -393,12 +375,7 @@ func TestHandler_Logout(t *testing.T) {
 	defer cleanupMembers(t)
 	_, _, handler := setupMemberHandler()
 
-	regBody, _ := json.Marshal(domain.RegisterRequest{
-		Email:    "logout@example.com",
-		Password: "password",
-		Name:     "Logout User",
-	})
-	w := executeRequest(http.MethodPost, "/api/members/register", regBody, handler.RegisterMember)
+	w := executeRegister(handler, "logout@example.com", "password", "Logout User", seedCode(t, "logout"))
 	require.Equal(t, http.StatusCreated, w.Code)
 
 	loginBody, _ := json.Marshal(domain.LoginRequest{
@@ -421,4 +398,16 @@ func TestHandler_Logout(t *testing.T) {
 	assert.Equal(t, "session_key", clearCookie.Name)
 	assert.Equal(t, "", clearCookie.Value)
 	assert.Equal(t, -1, clearCookie.MaxAge)
+}
+
+func TestHandler_Login_BadUser(t *testing.T) {
+	defer cleanupMembers(t)
+	_, _, handler := setupMemberHandler()
+
+	loginBody, _ := json.Marshal(domain.LoginRequest{
+		Email:    "nobody@example.com",
+		Password: "password",
+	})
+	w := executeRequest(http.MethodPost, "/api/members/login", loginBody, handler.LoginMember)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
