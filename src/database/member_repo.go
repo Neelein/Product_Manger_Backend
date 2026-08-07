@@ -37,7 +37,7 @@ func (r *MemberRepositoryPGX) Create(ctx context.Context, member *domain.Member)
 func (r *MemberRepositoryPGX) GetByEmail(ctx context.Context, email string) (*domain.Member, error) {
 	var m domain.Member
 	err := r.pool.QueryRow(ctx, "SELECT * FROM get_member_by_email($1)", email,
-	).Scan(&m.ID, &m.Email, &m.Password, &m.Name, &m.CreatedAt, &m.UpdatedAt)
+	).Scan(&m.ID, &m.Email, &m.Password, &m.Name, &m.Role, &m.CreatedAt, &m.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -50,7 +50,7 @@ func (r *MemberRepositoryPGX) GetByEmail(ctx context.Context, email string) (*do
 func (r *MemberRepositoryPGX) GetByID(ctx context.Context, id string) (*domain.Member, error) {
 	var m domain.Member
 	err := r.pool.QueryRow(ctx, "SELECT * FROM get_member_by_id($1)", id,
-	).Scan(&m.ID, &m.Email, &m.Password, &m.Name, &m.CreatedAt, &m.UpdatedAt)
+	).Scan(&m.ID, &m.Email, &m.Password, &m.Name, &m.Role, &m.CreatedAt, &m.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil

@@ -45,6 +45,13 @@ type SessionRepository interface {
 	DeleteByMemberID(ctx context.Context, memberID string) error
 }
 
+type RegistrationCodeRepository interface {
+	RegisterMemberWithCode(ctx context.Context, member *Member, code string) error
+	Create(ctx context.Context, createdBy string, code string) (*RegistrationCode, error)
+	List(ctx context.Context) ([]RegistrationCode, error)
+	Delete(ctx context.Context, id string) (bool, error)
+}
+
 type AnnouncementRepository interface {
 	Create(ctx context.Context, announcement *Announcement) error
 	GetByID(ctx context.Context, id string) (*Announcement, error)

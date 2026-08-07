@@ -44,7 +44,7 @@ jobs:
         with:
           repository: Neelein/Product_Manger_frontend
           ref: dev
-          fetch-depth: 0
+          fetch-depth: 0  
           path: frontend
 
       - name: Install frontend dependencies

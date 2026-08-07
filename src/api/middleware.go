@@ -51,3 +51,23 @@ func AuthMiddleware(sessionRepo domain.SessionRepository, memberRepo domain.Memb
 		})
 	}
 }
+
+// RequireRole wraps an authenticated middleware chain: it first runs the auth
+// middleware to populate the member context, then rejects the request unless the
+// authenticated member has the required role.
+func RequireRole(role string, auth func(http.Handler) http.Handler) func(http.Handler) http.Handler {
+	return func(handler http.Handler) http.Handler {
+		return auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			member := MemberFromContext(r.Context())
+			if member == nil {
+				writeError(w, http.StatusUnauthorized, "unauthorized")
+				return
+			}
+			if member.Role != role {
+				writeError(w, http.StatusForbidden, "forbidden")
+				return
+			}
+			handler.ServeHTTP(w, r)
+		}))
+	}
+}

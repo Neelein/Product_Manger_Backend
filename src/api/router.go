@@ -44,8 +44,8 @@ func RegisterInventoryRoutes(r *mux.Router, repo domain.InventoryRepository, mem
 	r.Handle("/api/inventories/{inventoryId}/items/{itemId}/delete", auth(http.HandlerFunc(h.DeleteItem))).Methods("POST")
 }
 
-func RegisterMemberRoutes(r *mux.Router, memberRepo domain.MemberRepository, sessionRepo domain.SessionRepository) {
-	h := NewMemberHandler(memberRepo, sessionRepo)
+func RegisterMemberRoutes(r *mux.Router, memberRepo domain.MemberRepository, sessionRepo domain.SessionRepository, codeRepo domain.RegistrationCodeRepository) {
+	h := NewMemberHandler(memberRepo, sessionRepo, codeRepo)
 	auth := AuthMiddleware(sessionRepo, memberRepo)
 
 	r.HandleFunc("/api/members/register", h.RegisterMember).Methods("POST")
@@ -53,6 +53,16 @@ func RegisterMemberRoutes(r *mux.Router, memberRepo domain.MemberRepository, ses
 	r.HandleFunc("/api/members/logout", h.LogoutMember).Methods("POST")
 	r.Handle("/api/members/me", auth(http.HandlerFunc(h.GetCurrentMember))).Methods("GET")
 	r.Handle("/api/members/update", auth(http.HandlerFunc(h.UpdateMember))).Methods("POST")
+}
+
+func RegisterRegistrationCodeRoutes(r *mux.Router, codeRepo domain.RegistrationCodeRepository, memberRepo domain.MemberRepository, sessionRepo domain.SessionRepository) {
+	h := NewRegistrationCodeHandler(codeRepo)
+	auth := AuthMiddleware(sessionRepo, memberRepo)
+	adminAuth := RequireRole("admin", auth)
+
+	r.Handle("/api/registration-codes", adminAuth(http.HandlerFunc(h.CreateCode))).Methods("POST")
+	r.Handle("/api/registration-codes", adminAuth(http.HandlerFunc(h.ListCodes))).Methods("GET")
+	r.Handle("/api/registration-codes/{id}", adminAuth(http.HandlerFunc(h.DeleteCode))).Methods("DELETE")
 }
 
 func RegisterAnnouncementRoutes(r *mux.Router, repo domain.AnnouncementRepository, memberRepo domain.MemberRepository, sessionRepo domain.SessionRepository) {
