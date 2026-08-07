@@ -109,6 +109,43 @@ func TestHandler_Login(t *testing.T) {
 	require.NotNil(t, sessionCookie)
 	assert.NotEmpty(t, sessionCookie.Value)
 	assert.True(t, sessionCookie.HttpOnly)
+	assert.False(t, sessionCookie.Secure)
+}
+
+func TestHandler_Login_HTTPSecure(t *testing.T) {
+	defer cleanupMembers(t)
+	_, _, handler := setupMemberHandler()
+
+	regBody, _ := json.Marshal(domain.RegisterRequest{
+		Email:    "secure@example.com",
+		Password: "password",
+		Name:     "Secure User",
+	})
+	w := executeRequest(http.MethodPost, "/api/members/register", regBody, handler.RegisterMember)
+	require.Equal(t, http.StatusCreated, w.Code)
+
+	loginBody, _ := json.Marshal(domain.LoginRequest{
+		Email:    "secure@example.com",
+		Password: "password",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/members/login", bytes.NewReader(loginBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Forwarded-Proto", "https")
+	w = httptest.NewRecorder()
+	handler.LoginMember(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	cookies := w.Result().Cookies()
+	var sessionCookie *http.Cookie
+	for _, c := range cookies {
+		if c.Name == "session_key" {
+			sessionCookie = c
+			break
+		}
+	}
+	require.NotNil(t, sessionCookie)
+	assert.True(t, sessionCookie.Secure)
 }
 
 func TestHandler_Login_WrongPassword(t *testing.T) {

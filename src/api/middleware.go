@@ -44,15 +44,7 @@ func AuthMiddleware(sessionRepo domain.SessionRepository, memberRepo domain.Memb
 				return
 			}
 
-			http.SetCookie(w, &http.Cookie{
-				Name:     "session_key",
-				Value:    newSession.SessionKey,
-				Path:     "/",
-				HttpOnly: true,
-				Secure:   true,
-				SameSite: http.SameSiteLaxMode,
-				Expires:  newSession.ExpiresAt,
-			})
+			http.SetCookie(w, sessionCookie(r, newSession))
 
 			ctx := context.WithValue(r.Context(), memberKey, member)
 			next.ServeHTTP(w, r.WithContext(ctx))
