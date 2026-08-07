@@ -92,23 +92,14 @@ func (h *MemberHandler) LoginMember(w http.ResponseWriter, r *http.Request) {
 	}
 
 	session := domain.Session{
-		MemberID:          member.ID,
-		DeviceFingerprint: DeviceFingerprint(r),
+		MemberID: member.ID,
 	}
 	if err := h.sessionRepo.Create(context.Background(), &session); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     "session_key",
-		Value:    session.SessionKey,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-		Expires:  session.ExpiresAt,
-	})
+	http.SetCookie(w, sessionCookie(r, &session))
 
 	writeJSON(w, http.StatusOK, domain.LoginResponse{
 		Member: domain.MemberResponse{
@@ -131,15 +122,7 @@ func (h *MemberHandler) LogoutMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     "session_key",
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   -1,
-	})
+	http.SetCookie(w, clearSessionCookie(r))
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "logged out"})
 }
