@@ -12,12 +12,11 @@ type Member struct {
 }
 
 type Session struct {
-	ID                string    `json:"id"`
-	MemberID          string    `json:"member_id"`
-	SessionKey        string    `json:"session_key"`
-	DeviceFingerprint string    `json:"device_fingerprint"`
-	CreatedAt         time.Time `json:"created_at"`
-	ExpiresAt         time.Time `json:"expires_at"`
+	ID         string    `json:"id"`
+	MemberID   string    `json:"member_id"`
+	SessionKey string    `json:"session_key"`
+	CreatedAt  time.Time `json:"created_at"`
+	ExpiresAt  time.Time `json:"expires_at"`
 }
 
 type RegisterRequest struct {
@@ -50,4 +49,3 @@ type MembersListResponse struct {
 	Members []MemberResponse `json:"members"`
 	Total   int              `json:"total"`
 }
-

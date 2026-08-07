@@ -25,7 +25,7 @@ import (
 func setupChatTest() (*database.ChatRoomRepositoryPGX, *database.MemberRepositoryPGX, *database.SessionCache, *api.ChatRoomHandler) {
 	repo := database.NewChatRoomRepositoryPGX(testPool)
 	memberRepo := database.NewMemberRepositoryPGX(testPool)
-	sessionCache := database.NewSessionCache(24 * time.Hour)
+	sessionCache := database.NewSessionCache(time.Hour)
 	handler := api.NewChatRoomHandler(repo)
 	return repo, memberRepo, sessionCache, handler
 }
@@ -80,8 +80,6 @@ func TestChatHandler_CreateRoom(t *testing.T) {
 
 	_ = chatRepo
 }
-
-
 
 func TestChatHandler_ListRooms(t *testing.T) {
 	defer cleanupChat(t)

@@ -25,7 +25,7 @@ func setupInventoryTest(t *testing.T) (*database.InventoryRepositoryPGX, *databa
 	invRepo := database.NewInventoryRepositoryPGX(testPool)
 	productRepo := database.NewProductRepositoryPGX(testPool)
 	memberRepo := database.NewMemberRepositoryPGX(testPool)
-	sessionCache := database.NewSessionCache(24 * time.Hour)
+	sessionCache := database.NewSessionCache(time.Hour)
 	handler := api.NewInventoryHandler(invRepo)
 	return invRepo, productRepo, memberRepo, sessionCache, handler
 }
@@ -533,22 +533,22 @@ func TestInventoryHandler_GetItem(t *testing.T) {
 	invRepo.CreateItem(context.Background(), &created)
 
 	tests := []struct {
-		name         string
-		inventoryID  string
-		itemID       string
-		wantStatus   int
+		name        string
+		inventoryID string
+		itemID      string
+		wantStatus  int
 	}{
 		{
-			name:         "existing item",
-			inventoryID:  inventory.ID,
-			itemID:       created.ID,
-			wantStatus:   http.StatusOK,
+			name:        "existing item",
+			inventoryID: inventory.ID,
+			itemID:      created.ID,
+			wantStatus:  http.StatusOK,
 		},
 		{
-			name:         "non-existent item",
-			inventoryID:  inventory.ID,
-			itemID:       "00000000-0000-0000-0000-000000000000",
-			wantStatus:   http.StatusNotFound,
+			name:        "non-existent item",
+			inventoryID: inventory.ID,
+			itemID:      "00000000-0000-0000-0000-000000000000",
+			wantStatus:  http.StatusNotFound,
 		},
 	}
 
@@ -593,11 +593,11 @@ func TestInventoryHandler_UpdateItem(t *testing.T) {
 	invRepo.CreateItem(context.Background(), &created)
 
 	tests := []struct {
-		name         string
-		inventoryID  string
-		itemID       string
-		body         any
-		wantStatus   int
+		name        string
+		inventoryID string
+		itemID      string
+		body        any
+		wantStatus  int
 	}{
 		{
 			name:        "update existing item",
@@ -699,10 +699,10 @@ func TestInventoryHandler_DeleteItem(t *testing.T) {
 	invRepo.CreateItem(context.Background(), &created)
 
 	tests := []struct {
-		name         string
-		inventoryID  string
-		itemID       string
-		wantStatus   int
+		name        string
+		inventoryID string
+		itemID      string
+		wantStatus  int
 	}{
 		{
 			name:        "delete existing",

@@ -62,7 +62,7 @@ func main() {
 	repo := database.NewProductRepositoryPGX(pool)
 	inventoryRepo := database.NewInventoryRepositoryPGX(pool)
 	memberRepo := database.NewMemberRepositoryPGX(pool)
-	sessionRepo := database.NewSessionCache(24 * time.Hour)
+	sessionRepo := database.NewSessionCache(time.Hour)
 	defer sessionRepo.Stop()
 
 	r := mux.NewRouter()

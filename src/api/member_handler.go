@@ -92,8 +92,7 @@ func (h *MemberHandler) LoginMember(w http.ResponseWriter, r *http.Request) {
 	}
 
 	session := domain.Session{
-		MemberID:          member.ID,
-		DeviceFingerprint: DeviceFingerprint(r),
+		MemberID: member.ID,
 	}
 	if err := h.sessionRepo.Create(context.Background(), &session); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

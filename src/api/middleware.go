@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"backend/src/domain"
@@ -33,18 +32,8 @@ func AuthMiddleware(sessionRepo domain.SessionRepository, memberRepo domain.Memb
 				return
 			}
 
-			fingerprint := DeviceFingerprint(r)
-
-			newSession, err := sessionRepo.Rotate(r.Context(), cookie.Value, fingerprint)
-			if err != nil {
-				if errors.Is(err, domain.ErrSessionExpired) {
-					writeError(w, http.StatusUnauthorized, "session expired")
-					return
-				}
-				if errors.Is(err, domain.ErrDeviceMismatch) {
-					writeError(w, http.StatusUnauthorized, "device mismatch")
-					return
-				}
+			newSession, err := sessionRepo.GetByKey(r.Context(), cookie.Value)
+			if err != nil || newSession == nil {
 				writeError(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}

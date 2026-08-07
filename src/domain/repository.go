@@ -41,7 +41,6 @@ type InventoryRepository interface {
 type SessionRepository interface {
 	Create(ctx context.Context, session *Session) error
 	GetByKey(ctx context.Context, sessionKey string) (*Session, error)
-	Rotate(ctx context.Context, oldSessionKey string, fingerprint string) (*Session, error)
 	Delete(ctx context.Context, sessionKey string) error
 	DeleteByMemberID(ctx context.Context, memberID string) error
 }

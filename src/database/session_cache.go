@@ -68,47 +68,20 @@ func (c *SessionCache) Create(_ context.Context, session *domain.Session) error 
 }
 
 func (c *SessionCache) GetByKey(_ context.Context, sessionKey string) (*domain.Session, error) {
-	c.mu.RLock()
-	s, ok := c.sessions[sessionKey]
-	c.mu.RUnlock()
-	if !ok {
-		return nil, nil
-	}
-	if s.ExpiresAt.Before(time.Now()) {
-		c.Delete(context.Background(), sessionKey)
-		return nil, nil
-	}
-	return s, nil
-}
-
-func (c *SessionCache) Rotate(_ context.Context, oldKey string, fingerprint string) (*domain.Session, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	s, ok := c.sessions[oldKey]
+	s, ok := c.sessions[sessionKey]
 	if !ok {
-		return nil, domain.ErrSessionNotFound
+		return nil, nil
 	}
 	if s.ExpiresAt.Before(time.Now()) {
-		delete(c.sessions, oldKey)
-		return nil, domain.ErrSessionExpired
+		delete(c.sessions, sessionKey)
+		return nil, nil
 	}
-	if s.DeviceFingerprint != "" && s.DeviceFingerprint != fingerprint {
-		return nil, domain.ErrDeviceMismatch
-	}
-
-	newSession := &domain.Session{
-		ID:                uuid.New().String(),
-		MemberID:          s.MemberID,
-		SessionKey:        uuid.New().String(),
-		DeviceFingerprint: fingerprint,
-		CreatedAt:         time.Now(),
-		ExpiresAt:         s.ExpiresAt,
-	}
-
-	delete(c.sessions, oldKey)
-	c.sessions[newSession.SessionKey] = newSession
-	return newSession, nil
+	s.ExpiresAt = time.Now().Add(c.ttl)
+	cp := *s
+	return &cp, nil
 }
 
 func (c *SessionCache) Delete(_ context.Context, sessionKey string) error {

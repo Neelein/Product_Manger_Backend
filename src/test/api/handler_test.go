@@ -86,7 +86,7 @@ func runMigration(ctx context.Context, pool *pgxpool.Pool) {
 func setupTestHandler() (*database.ProductRepositoryPGX, *database.MemberRepositoryPGX, *database.SessionCache, *api.ProductHandler) {
 	repo := database.NewProductRepositoryPGX(testPool)
 	memberRepo := database.NewMemberRepositoryPGX(testPool)
-	sessionCache := database.NewSessionCache(24 * time.Hour)
+	sessionCache := database.NewSessionCache(time.Hour)
 	handler := api.NewProductHandler(repo)
 	return repo, memberRepo, sessionCache, handler
 }
