@@ -65,6 +65,16 @@ func RegisterRegistrationCodeRoutes(r *mux.Router, codeRepo domain.RegistrationC
 	r.Handle("/api/registration-codes/{id}", adminAuth(http.HandlerFunc(h.DeleteCode))).Methods("DELETE")
 }
 
+func RegisterCategoryRoutes(r *mux.Router, categoryRepo domain.CategoryRepository, memberRepo domain.MemberRepository, sessionRepo domain.SessionRepository) {
+	h := NewCategoryHandler(categoryRepo)
+	auth := AuthMiddleware(sessionRepo, memberRepo)
+
+	r.HandleFunc("/api/categories", h.ListCategories).Methods("GET")
+	r.Handle("/api/categories", auth(http.HandlerFunc(h.CreateCategory))).Methods("POST")
+	r.Handle("/api/categories/{id}/update", auth(http.HandlerFunc(h.UpdateCategory))).Methods("POST")
+	r.Handle("/api/categories/{id}/delete", auth(http.HandlerFunc(h.DeleteCategory))).Methods("POST")
+}
+
 func RegisterAnnouncementRoutes(r *mux.Router, repo domain.AnnouncementRepository, memberRepo domain.MemberRepository, sessionRepo domain.SessionRepository) {
 	h := NewAnnouncementHandler(repo)
 	auth := AuthMiddleware(sessionRepo, memberRepo)

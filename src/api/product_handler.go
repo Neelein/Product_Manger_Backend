@@ -35,11 +35,11 @@ func (h *ProductHandler) CreateProduct(
 	}
 
 	product := domain.Product{
-		Name:      req.Name,
-		Status:    req.Status,
-		Price:     req.Price,
-		Category:  req.Category,
-		CreatedBy: member.ID,
+		Name:       req.Name,
+		Status:     req.Status,
+		Price:      req.Price,
+		CategoryID: req.CategoryID,
+		CreatedBy:  member.ID,
 	}
 
 	if err := h.repo.Create(context.Background(), &product); err != nil {
@@ -91,11 +91,11 @@ func (h *ProductHandler) UpdateProduct(
 	}
 
 	product := domain.Product{
-		ID:       productID,
-		Name:     req.Name,
-		Status:   req.Status,
-		Price:    req.Price,
-		Category: req.Category,
+		ID:         productID,
+		Name:       req.Name,
+		Status:     req.Status,
+		Price:      req.Price,
+		CategoryID: req.CategoryID,
 	}
 
 	if err := h.repo.Update(context.Background(), &product); err != nil {

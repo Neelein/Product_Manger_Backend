@@ -52,6 +52,13 @@ type RegistrationCodeRepository interface {
 	Delete(ctx context.Context, id string) (bool, error)
 }
 
+type CategoryRepository interface {
+	List(ctx context.Context) ([]Category, error)
+	Create(ctx context.Context, name string) (*Category, error)
+	Update(ctx context.Context, id, name string) (bool, error)
+	Delete(ctx context.Context, id string) (bool, error)
+}
+
 type AnnouncementRepository interface {
 	Create(ctx context.Context, announcement *Announcement) error
 	GetByID(ctx context.Context, id string) (*Announcement, error)

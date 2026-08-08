@@ -23,13 +23,19 @@ func main() {
 	}
 	defer pool.Close()
 
-	_, _ = pool.Exec(ctx, "TRUNCATE TABLE inventory_items, inventories, product_prices, product_details, products, members CASCADE")
+	_, _ = pool.Exec(ctx, "TRUNCATE TABLE inventory_items, inventories, product_prices, product_details, products, categories, members CASCADE")
 
 	repo := database.NewProductRepositoryPGX(pool)
 	invRepo := database.NewInventoryRepositoryPGX(pool)
+	catRepo := database.NewCategoryRepositoryPGX(pool)
+
+	ticketCat, err := catRepo.Create(ctx, "ticket")
+	must(err)
+	ebookCat, err := catRepo.Create(ctx, "ebook")
+	must(err)
 
 	// ── Product A: 演唱會門票 ──
-	p1 := domain.Product{Name: "周杰倫演唱會門票", Price: 3800, Category: "ticket"}
+	p1 := domain.Product{Name: "周杰倫演唱會門票", Price: 3800, CategoryID: ticketCat.ID}
 	must(repo.Create(ctx, &p1))
 
 	d1 := domain.ProductDetail{
@@ -110,7 +116,7 @@ func main() {
 	fmt.Printf("✅ 庫存明細 (一般區) — 5 筆 (全部售出)\n")
 
 	// ── Product B: 電子書 ──
-	p2 := domain.Product{Name: "Go 語言實戰手冊", Price: 450, Category: "ebook"}
+	p2 := domain.Product{Name: "Go 語言實戰手冊", Price: 450, CategoryID: ebookCat.ID}
 	must(repo.Create(ctx, &p2))
 
 	d2 := domain.ProductDetail{
