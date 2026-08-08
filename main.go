@@ -49,6 +49,8 @@ func main() {
 		log.Fatal("DATABASE_URL is not set")
 	}
 
+	secret := os.Getenv("API_GATEWAY_SECRET")
+
 	pool, err := database.NewPool(context.Background(), databaseURL)
 	if err != nil {
 		log.Fatalf("failed to connect to database: %v", err)
@@ -81,8 +83,13 @@ func main() {
 	api.RegisterChatRoutes(r, database.NewChatRoomRepositoryPGX(pool), memberRepo, sessionRepo)
 	api.RegisterEventRoutes(r, database.NewEventRepositoryPGX(pool), memberRepo, sessionRepo)
 
+	handler := api.GatewayMiddleware(secret)(r)
+	if secret == "" {
+		log.Println("API_GATEWAY_SECRET is not set — /api routes are open")
+	}
+
 	log.Println("Server starting on :8090")
-	log.Fatal(http.ListenAndServe(":8090", r))
+	log.Fatal(http.ListenAndServe(":8090", handler))
 }
 
 func homeHandler(w http.ResponseWriter, r *http.Request) {

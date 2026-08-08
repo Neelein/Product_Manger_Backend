@@ -153,5 +153,6 @@ jobs:
               -v /root/Product/product_manger/media:/app/media \
               -e MEDIA_ROOT=/app/media \
               -e API_DOMAIN=https://你的網域.com \
+              -e API_GATEWAY_SECRET="${{ secrets.API_GATEWAY_SECRET }}" \
               -e DATABASE_URL="postgres://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@my_postgres_db:5432/productdb?sslmode=disable" \
               ghcr.io/neelein/product_manager_backend:latest
