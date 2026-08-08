@@ -39,12 +39,12 @@ jobs:
       - name: Install psql client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
-      - name: Checkout frontend (dev)
+      - name: Checkout frontend (matching branch)
         uses: actions/checkout@v4
         with:
           repository: Neelein/Product_Manger_frontend
-          ref: dev
-          fetch-depth: 0  
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
           path: frontend
 
       - name: Install frontend dependencies
