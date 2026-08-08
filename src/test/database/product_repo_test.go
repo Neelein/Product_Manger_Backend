@@ -4,9 +4,11 @@ package database_test
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -20,6 +22,8 @@ import (
 )
 
 var testPool *pgxpool.Pool
+
+var categorySeq atomic.Uint64
 
 func TestMain(m *testing.M) {
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
@@ -81,10 +85,10 @@ func ensureTestDatabase(ctx context.Context, u *url.URL) {
 }
 
 func dropTables(ctx context.Context, pool *pgxpool.Pool) {
-	for _, table := range []string{"read_receipts", "chat_messages", "chat_room_members", "chat_rooms", "announcements", "inventory_items", "inventories", "members", "registration_codes", "product_prices", "product_details", "products", "event_viewers", "events"} {
+	for _, table := range []string{"read_receipts", "chat_messages", "chat_room_members", "chat_rooms", "announcements", "inventory_items", "inventories", "members", "registration_codes", "categories", "product_prices", "product_details", "products", "event_viewers", "events"} {
 		_, _ = pool.Exec(ctx, "DROP TABLE IF EXISTS "+table+" CASCADE")
 	}
-	_, _ = pool.Exec(ctx, "DROP FUNCTION IF EXISTS create_chat_room, add_chat_room_members, get_chat_room_by_id, list_chat_rooms_by_member, update_chat_room, delete_chat_room, remove_chat_room_member, send_message, list_messages, delete_message, mark_message_read, get_message_read_by, count_room_unread, create_member, get_member_by_email, get_member_by_id, update_member, create_product, list_products, get_product_by_id, update_product, delete_product, create_product_detail, get_product_detail_by_product, update_product_detail, create_product_price, get_product_price_by_id, list_product_prices_by_detail, update_product_price, create_inventory, get_inventory_by_id, get_inventory_by_price_id, list_inventories, update_inventory, delete_inventory, create_inventory_item, get_inventory_item_by_id, list_inventory_items, update_inventory_item, delete_inventory_item, create_announcement, get_announcement_by_id, list_announcements, count_announcements, update_announcement, delete_announcement, create_event, get_event_by_id, list_events_by_month, update_event, delete_event, add_event_viewer, remove_event_viewer, list_event_viewers, list_announcements_by_month, count_announcements_by_month, list_chat_rooms_by_member_by_month, register_member_with_code, create_registration_code, list_registration_codes, delete_registration_code CASCADE")
+	_, _ = pool.Exec(ctx, "DROP FUNCTION IF EXISTS create_chat_room, add_chat_room_members, get_chat_room_by_id, list_chat_rooms_by_member, update_chat_room, delete_chat_room, remove_chat_room_member, send_message, list_messages, delete_message, mark_message_read, get_message_read_by, count_room_unread, create_member, get_member_by_email, get_member_by_id, update_member, create_product, list_products, get_product_by_id, update_product, delete_product, create_product_detail, get_product_detail_by_product, update_product_detail, create_product_price, get_product_price_by_id, list_product_prices_by_detail, update_product_price, create_inventory, get_inventory_by_id, get_inventory_by_price_id, list_inventories, update_inventory, delete_inventory, create_inventory_item, get_inventory_item_by_id, list_inventory_items, update_inventory_item, delete_inventory_item, create_announcement, get_announcement_by_id, list_announcements, count_announcements, update_announcement, delete_announcement, create_event, get_event_by_id, list_events_by_month, update_event, delete_event, add_event_viewer, remove_event_viewer, list_event_viewers, list_announcements_by_month, count_announcements_by_month, list_chat_rooms_by_member_by_month, register_member_with_code, create_registration_code, list_registration_codes, delete_registration_code, create_category, list_categories, update_category, delete_category CASCADE")
 }
 
 func runMigration(ctx context.Context, pool *pgxpool.Pool) {
@@ -104,6 +108,7 @@ func runMigration(ctx context.Context, pool *pgxpool.Pool) {
 		"../../../db/migrations/013_add_monthly_filters.up.sql",
 		"../../../db/migrations/014_insert_admin_member.up.sql",
 		"../../../db/migrations/015_create_registration_codes.up.sql",
+		"../../../db/migrations/016_create_categories.up.sql",
 	} {
 		schema, err := os.ReadFile(file)
 		if err != nil {
@@ -122,12 +127,24 @@ func cleanupProducts(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// createTestCategory creates a category with a unique name for the current test
+// run and returns it.
+func createTestCategory(t *testing.T, repo *database.CategoryRepositoryPGX) *domain.Category {
+	t.Helper()
+	c, err := repo.Create(context.Background(), fmt.Sprintf("cat-%d", categorySeq.Add(1)))
+	require.NoError(t, err)
+	return c
+}
+
 func createTestProduct(t *testing.T, repo *database.ProductRepositoryPGX) domain.Product {
 	t.Helper()
+	categoryRepo := database.NewCategoryRepositoryPGX(testPool)
+	category := createTestCategory(t, categoryRepo)
+
 	p := domain.Product{
-		Name:     "Test Product",
-		Price:    29.99,
-		Category: "electronics",
+		Name:       "Test Product",
+		Price:      29.99,
+		CategoryID: category.ID,
 	}
 	err := repo.Create(context.Background(), &p)
 	require.NoError(t, err)
@@ -137,16 +154,19 @@ func createTestProduct(t *testing.T, repo *database.ProductRepositoryPGX) domain
 func TestProductRepositoryPGX_Create(t *testing.T) {
 	defer cleanupProducts(t)
 	repo := database.NewProductRepositoryPGX(testPool)
+	categoryRepo := database.NewCategoryRepositoryPGX(testPool)
+	category := createTestCategory(t, categoryRepo)
 
 	product := domain.Product{
-		Name:     "New Product",
-		Price:    99.99,
-		Category: "general",
+		Name:       "New Product",
+		Price:      99.99,
+		CategoryID: category.ID,
 	}
 
 	err := repo.Create(context.Background(), &product)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, product.ID)
+	assert.Equal(t, category.ID, product.CategoryID)
 	assert.False(t, product.CreatedAt.IsZero())
 	assert.False(t, product.UpdatedAt.IsZero())
 }
@@ -223,8 +243,10 @@ func TestProductRepositoryPGX_Update(t *testing.T) {
 		created := createTestProduct(t, repo)
 		originalUpdatedAt := created.UpdatedAt
 
+		categoryRepo := database.NewCategoryRepositoryPGX(testPool)
+		newCategory := createTestCategory(t, categoryRepo)
 		created.Name = "Updated Name"
-		created.Category = "updated-category"
+		created.CategoryID = newCategory.ID
 
 		err := repo.Update(context.Background(), &created)
 		assert.NoError(t, err)
@@ -232,7 +254,8 @@ func TestProductRepositoryPGX_Update(t *testing.T) {
 		updated, err := repo.GetByID(context.Background(), created.ID)
 		assert.NoError(t, err)
 		assert.Equal(t, "Updated Name", updated.Name)
-		assert.Equal(t, "updated-category", updated.Category)
+		assert.Equal(t, newCategory.ID, updated.CategoryID)
+		assert.Equal(t, newCategory.Name, updated.Category)
 		assert.True(t, updated.UpdatedAt.After(originalUpdatedAt))
 	})
 

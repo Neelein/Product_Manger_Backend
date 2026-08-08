@@ -3,28 +3,29 @@ package domain
 import "time"
 
 type Product struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Status    string    `json:"status"`
-	Price     float64   `json:"price"`
-	Category  string    `json:"category"`
-	CreatedBy string    `json:"created_by"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	Status     string    `json:"status"`
+	Price      float64   `json:"price"`
+	CategoryID string    `json:"category_id"`
+	Category   string    `json:"category"`
+	CreatedBy  string    `json:"created_by"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 type CreateProductRequest struct {
-	Name     string  `json:"name"`
-	Status   string  `json:"status"`
-	Price    float64 `json:"price"`
-	Category string  `json:"category"`
+	Name       string  `json:"name"`
+	Status     string  `json:"status"`
+	Price      float64 `json:"price"`
+	CategoryID string  `json:"category_id"`
 }
 
 type UpdateProductRequest struct {
-	Name     string  `json:"name"`
-	Status   string  `json:"status"`
-	Price    float64 `json:"price"`
-	Category string  `json:"category"`
+	Name       string  `json:"name"`
+	Status     string  `json:"status"`
+	Price      float64 `json:"price"`
+	CategoryID string  `json:"category_id"`
 }
 
 type ProductResponse struct {

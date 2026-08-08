@@ -33,8 +33,13 @@ func (r *ProductRepositoryPGX) Create(
 		memberID = "00000000-0000-0000-0000-000000000000"
 	}
 
+	var categoryID *string
+	if product.CategoryID != "" {
+		categoryID = &product.CategoryID
+	}
+
 	err := r.pool.QueryRow(ctx, "SELECT * FROM create_product($1, $2, $3, $4)",
-		product.Name, status, product.Category, memberID,
+		product.Name, status, categoryID, memberID,
 	).Scan(&product.ID, &product.CreatedAt, &product.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("creating product: %w", err)
@@ -55,7 +60,7 @@ func (r *ProductRepositoryPGX) List(
 		var p domain.Product
 
 		err := row.Scan(
-			&p.ID, &p.Name, &p.Status, &p.Category,
+			&p.ID, &p.Name, &p.Status, &p.CategoryID, &p.Category,
 			&p.CreatedAt, &p.UpdatedAt,
 		)
 		if err != nil {
@@ -82,7 +87,7 @@ func (r *ProductRepositoryPGX) GetByID(
 	var p domain.Product
 
 	err := r.pool.QueryRow(ctx, "SELECT * FROM get_product_by_id($1)", id,
-	).Scan(&p.ID, &p.Name, &p.Status, &p.Category, &p.CreatedAt, &p.UpdatedAt)
+	).Scan(&p.ID, &p.Name, &p.Status, &p.CategoryID, &p.Category, &p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrProductNotFound
@@ -102,8 +107,13 @@ func (r *ProductRepositoryPGX) Update(
 		status = "active"
 	}
 
+	var categoryID *string
+	if product.CategoryID != "" {
+		categoryID = &product.CategoryID
+	}
+
 	err := r.pool.QueryRow(ctx, "SELECT * FROM update_product($1, $2, $3, $4)",
-		product.ID, product.Name, status, product.Category,
+		product.ID, product.Name, status, categoryID,
 	).Scan(&product.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
