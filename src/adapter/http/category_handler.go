@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
 
 	"backend/src/usecase"
 
@@ -12,15 +11,15 @@ import (
 )
 
 type CategoryHandler struct {
-	repo usecase.CategoryService
+	service usecase.CategoryService
 }
 
 func NewCategoryHandler(service usecase.CategoryService) *CategoryHandler {
-	return &CategoryHandler{repo: service}
+	return &CategoryHandler{service: service}
 }
 
 func (h *CategoryHandler) ListCategories(w http.ResponseWriter, r *http.Request) {
-	categories, err := h.repo.List(r.Context())
+	categories, err := h.service.List(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -36,14 +35,12 @@ func (h *CategoryHandler) CreateCategory(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	req.Name = strings.TrimSpace(req.Name)
-	if req.Name == "" {
-		writeError(w, http.StatusBadRequest, "category name is required")
-		return
-	}
-
-	category, err := h.repo.Create(r.Context(), req.Name)
+	category, err := h.service.Create(r.Context(), req.Name)
 	if err != nil {
+		if err == usecase.ErrInvalidCategoryName {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		if errors.Is(err, ErrCategoryNameExists) {
 			writeError(w, http.StatusConflict, "category name already exists")
 			return
@@ -64,14 +61,12 @@ func (h *CategoryHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	req.Name = strings.TrimSpace(req.Name)
-	if req.Name == "" {
-		writeError(w, http.StatusBadRequest, "category name is required")
-		return
-	}
-
-	updated, err := h.repo.Update(r.Context(), id, req.Name)
+	updated, err := h.service.Update(r.Context(), id, req.Name)
 	if err != nil {
+		if err == usecase.ErrInvalidCategoryName {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		if errors.Is(err, ErrCategoryNameExists) {
 			writeError(w, http.StatusConflict, "category name already exists")
 			return
@@ -96,7 +91,7 @@ func (h *CategoryHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 func (h *CategoryHandler) DeleteCategory(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 
-	deleted, err := h.repo.Delete(r.Context(), id)
+	deleted, err := h.service.Delete(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, ErrCategoryInUse) {
 			writeError(w, http.StatusConflict, "category in use")
@@ -114,7 +109,7 @@ func (h *CategoryHandler) DeleteCategory(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *CategoryHandler) findCategory(r *http.Request, id string) (*Category, bool) {
-	categories, err := h.repo.List(r.Context())
+	categories, err := h.service.List(r.Context())
 	if err != nil {
 		return nil, false
 	}

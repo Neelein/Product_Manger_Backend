@@ -10,11 +10,11 @@ import (
 )
 
 type RegistrationCodeHandler struct {
-	codeRepo usecase.RegistrationCodeService
+	service usecase.RegistrationCodeService
 }
 
 func NewRegistrationCodeHandler(service usecase.RegistrationCodeService) *RegistrationCodeHandler {
-	return &RegistrationCodeHandler{codeRepo: service}
+	return &RegistrationCodeHandler{service: service}
 }
 
 func (h *RegistrationCodeHandler) CreateCode(w http.ResponseWriter, r *http.Request) {
@@ -30,7 +30,11 @@ func (h *RegistrationCodeHandler) CreateCode(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	code, err := h.codeRepo.Create(r.Context(), member.ID, req.Code)
+	code, err := h.service.CreateApplication(r.Context(), member.ID, req.Code)
+	if err == usecase.ErrRegistrationCodeRequired {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -40,7 +44,7 @@ func (h *RegistrationCodeHandler) CreateCode(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *RegistrationCodeHandler) ListCodes(w http.ResponseWriter, r *http.Request) {
-	codes, err := h.codeRepo.List(r.Context())
+	codes, err := h.service.List(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -52,7 +56,7 @@ func (h *RegistrationCodeHandler) DeleteCode(w http.ResponseWriter, r *http.Requ
 	vars := mux.Vars(r)
 	id := vars["id"]
 
-	deleted, err := h.codeRepo.Delete(r.Context(), id)
+	deleted, err := h.service.Delete(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

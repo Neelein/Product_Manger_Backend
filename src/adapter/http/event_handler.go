@@ -2,20 +2,35 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
+	"backend/src/domain/model"
 	"backend/src/usecase"
 
 	"github.com/gorilla/mux"
 )
 
 type EventHandler struct {
-	repo usecase.EventService
+	service usecase.EventService
+}
+
+func eventError(w http.ResponseWriter, err error, fallback int) bool {
+	if errors.Is(err, model.ErrNotEventOwner) {
+		writeError(w, http.StatusForbidden, "forbidden")
+		return true
+	}
+	if errors.Is(err, model.ErrEventNotFound) {
+		writeError(w, http.StatusNotFound, err.Error())
+		return true
+	}
+	writeError(w, fallback, err.Error())
+	return true
 }
 
 func NewEventHandler(service usecase.EventService) *EventHandler {
-	return &EventHandler{repo: service}
+	return &EventHandler{service: service}
 }
 
 func (h *EventHandler) CreateEvent(w http.ResponseWriter, r *http.Request) {
@@ -31,33 +46,19 @@ func (h *EventHandler) CreateEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Title == "" {
-		writeError(w, http.StatusBadRequest, "title is required")
-		return
-	}
-
-	if req.Status == "" {
-		req.Status = "active"
-	}
-
-	req.StartTime = req.StartTime.UTC()
-	req.EndTime = req.EndTime.UTC()
-
-	event := Event{
-		Title:       req.Title,
-		Description: req.Description,
-		StartTime:   req.StartTime,
-		EndTime:     req.EndTime,
-		Status:      req.Status,
-		CreatedBy:   member.ID,
-	}
-
-	if err := h.repo.Create(r.Context(), &event); err != nil {
+	event, err := h.service.CreateApplication(r.Context(), member.ID, usecase.EventCreateInput{
+		Title: req.Title, Description: req.Description, StartTime: req.StartTime, EndTime: req.EndTime, Status: req.Status,
+	})
+	if err != nil {
+		if err == usecase.ErrEventTitleRequired {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, EventResponse{Event: event})
+	writeJSON(w, http.StatusCreated, EventResponse{Event: *event})
 }
 
 func (h *EventHandler) ListEventsByMonth(w http.ResponseWriter, r *http.Request) {
@@ -70,25 +71,37 @@ func (h *EventHandler) ListEventsByMonth(w http.ResponseWriter, r *http.Request)
 	yearStr := r.URL.Query().Get("year")
 	monthStr := r.URL.Query().Get("month")
 
-	if yearStr == "" || monthStr == "" {
-		writeError(w, http.StatusBadRequest, "year and month query parameters are required")
-		return
-	}
-
 	year, err := strconv.Atoi(yearStr)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid year")
-		return
+		year = 0
 	}
 
 	month, err := strconv.Atoi(monthStr)
-	if err != nil || month < 1 || month > 12 {
+	if err != nil {
+		month = 0
+	}
+	if yearStr != "" && year == 0 {
+		writeError(w, http.StatusBadRequest, "invalid year")
+		return
+	}
+	if monthStr != "" && month == 0 {
 		writeError(w, http.StatusBadRequest, "invalid month")
 		return
 	}
-
-	events, err := h.repo.ListByMonth(r.Context(), year, month, member.ID)
+	events, err := h.service.ListByMonthApplication(r.Context(), member.ID, year, month)
 	if err != nil {
+		if err == usecase.ErrEventMonthRequired {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if year == 0 {
+			writeError(w, http.StatusBadRequest, "invalid year")
+			return
+		}
+		if err == usecase.ErrEventMonthInvalid {
+			writeError(w, http.StatusBadRequest, "invalid month")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -105,7 +118,7 @@ func (h *EventHandler) GetEvent(w http.ResponseWriter, r *http.Request) {
 
 	eventID := mux.Vars(r)["eventId"]
 
-	event, err := h.repo.GetByID(r.Context(), eventID, member.ID)
+	event, err := h.service.GetByID(r.Context(), eventID, member.ID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
@@ -123,47 +136,17 @@ func (h *EventHandler) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 
 	eventID := mux.Vars(r)["eventId"]
 
-	event, err := h.repo.GetByID(r.Context(), eventID, member.ID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
-		return
-	}
-
-	if event.CreatedBy != member.ID {
-		writeError(w, http.StatusForbidden, "forbidden")
-		return
-	}
-
 	var req UpdateEventRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
-	if req.Title != "" {
-		event.Title = req.Title
-	}
-	if req.Description != "" {
-		event.Description = req.Description
-	}
-	if !req.StartTime.IsZero() {
-		event.StartTime = req.StartTime.UTC()
-	}
-	if !req.EndTime.IsZero() {
-		event.EndTime = req.EndTime.UTC()
-	}
-	if req.Status != "" {
-		event.Status = req.Status
-	}
-
-	if err := h.repo.Update(r.Context(), event); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	updated, err := h.repo.GetByID(r.Context(), eventID, member.ID)
+	updated, err := h.service.UpdateApplication(r.Context(), eventID, member.ID, member.Role == "admin", usecase.EventUpdateInput{
+		Title: req.Title, Description: req.Description, StartTime: req.StartTime, EndTime: req.EndTime, Status: req.Status,
+	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		eventError(w, err, http.StatusInternalServerError)
 		return
 	}
 
@@ -179,19 +162,8 @@ func (h *EventHandler) DeleteEvent(w http.ResponseWriter, r *http.Request) {
 
 	eventID := mux.Vars(r)["eventId"]
 
-	event, err := h.repo.GetByID(r.Context(), eventID, member.ID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
-		return
-	}
-
-	if event.CreatedBy != member.ID {
-		writeError(w, http.StatusForbidden, "forbidden")
-		return
-	}
-
-	if err := h.repo.Delete(r.Context(), eventID); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if err := h.service.DeleteApplication(r.Context(), eventID, member.ID, member.Role == "admin"); err != nil {
+		eventError(w, err, http.StatusInternalServerError)
 		return
 	}
 
@@ -207,30 +179,18 @@ func (h *EventHandler) AddViewer(w http.ResponseWriter, r *http.Request) {
 
 	eventID := mux.Vars(r)["eventId"]
 
-	event, err := h.repo.GetByID(r.Context(), eventID, member.ID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
-		return
-	}
-
-	if event.CreatedBy != member.ID {
-		writeError(w, http.StatusForbidden, "forbidden")
-		return
-	}
-
 	var req AddEventViewerRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
-	if req.MemberID == "" {
-		writeError(w, http.StatusBadRequest, "member_id is required")
-		return
-	}
-
-	if err := h.repo.AddViewer(r.Context(), eventID, req.MemberID); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if err := h.service.AddViewerApplication(r.Context(), eventID, member.ID, req.MemberID, member.Role == "admin"); err != nil {
+		if err == model.ErrInvalidProductVariant {
+			writeError(w, http.StatusBadRequest, "member_id is required")
+			return
+		}
+		eventError(w, err, http.StatusInternalServerError)
 		return
 	}
 
@@ -248,19 +208,8 @@ func (h *EventHandler) RemoveViewer(w http.ResponseWriter, r *http.Request) {
 	eventID := vars["eventId"]
 	memberID := vars["memberId"]
 
-	event, err := h.repo.GetByID(r.Context(), eventID, member.ID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
-		return
-	}
-
-	if event.CreatedBy != member.ID {
-		writeError(w, http.StatusForbidden, "forbidden")
-		return
-	}
-
-	if err := h.repo.RemoveViewer(r.Context(), eventID, memberID); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	if err := h.service.RemoveViewerApplication(r.Context(), eventID, member.ID, memberID, member.Role == "admin"); err != nil {
+		eventError(w, err, http.StatusInternalServerError)
 		return
 	}
 
@@ -276,20 +225,9 @@ func (h *EventHandler) ListViewers(w http.ResponseWriter, r *http.Request) {
 
 	eventID := mux.Vars(r)["eventId"]
 
-	event, err := h.repo.GetByID(r.Context(), eventID, member.ID)
+	viewers, err := h.service.ListViewersApplication(r.Context(), eventID, member.ID, member.Role == "admin")
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
-		return
-	}
-
-	if event.CreatedBy != member.ID {
-		writeError(w, http.StatusForbidden, "forbidden")
-		return
-	}
-
-	viewers, err := h.repo.ListViewers(r.Context(), eventID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		eventError(w, err, http.StatusInternalServerError)
 		return
 	}
 

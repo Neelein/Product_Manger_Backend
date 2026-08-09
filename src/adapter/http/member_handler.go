@@ -5,9 +5,8 @@ import (
 	"errors"
 	"net/http"
 
+	"backend/src/domain/model"
 	"backend/src/usecase"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 func memberFromRequest(r *http.Request) *Member {
@@ -43,24 +42,12 @@ func (h *MemberHandler) RegisterMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Code == "" {
-		writeError(w, http.StatusBadRequest, "registration code is required")
-		return
-	}
-
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to hash password")
-		return
-	}
-
 	member := Member{
-		Email:    req.Email,
-		Password: string(hashedPassword),
-		Name:     req.Name,
+		Email: req.Email,
+		Name:  req.Name,
 	}
 
-	if err := h.codeService.RegisterMemberWithCode(r.Context(), &member, req.Code); err != nil {
+	if err := h.memberService.RegisterApplication(r.Context(), &member, req.Password, req.Code); err != nil {
 		switch {
 		case errors.Is(err, ErrEmailAlreadyExists):
 			writeError(w, http.StatusConflict, "email already exists")
@@ -89,30 +76,17 @@ func (h *MemberHandler) LoginMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	member, err := h.memberService.GetByEmail(r.Context(), req.Email)
+	member, session, err := h.memberService.Authenticate(r.Context(), req.Email, req.Password)
+	if err == model.ErrInvalidCredentials {
+		writeError(w, http.StatusUnauthorized, "invalid credentials")
+		return
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if member == nil {
-		writeError(w, http.StatusUnauthorized, "invalid credentials")
-		return
-	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(member.Password), []byte(req.Password)); err != nil {
-		writeError(w, http.StatusUnauthorized, "invalid credentials")
-		return
-	}
-
-	session := Session{
-		MemberID: member.ID,
-	}
-	if err := h.sessionService.Create(r.Context(), &session); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	http.SetCookie(w, sessionCookie(r, &session))
+	http.SetCookie(w, sessionCookie(r, session))
 
 	writeJSON(w, http.StatusOK, LoginResponse{
 		Member: MemberResponse{
@@ -154,15 +128,11 @@ func (h *MemberHandler) UpdateMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Email == "" || req.Name == "" {
-		writeError(w, http.StatusBadRequest, "email and name are required")
-		return
-	}
-
-	member.Email = req.Email
-	member.Name = req.Name
-
-	if err := h.memberService.Update(r.Context(), member); err != nil {
+	if err := h.memberService.UpdateApplication(r.Context(), member, req.Email, req.Name); err != nil {
+		if err.Error() == "email and name are required" {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		if errors.Is(err, ErrEmailAlreadyExists) {
 			writeError(w, http.StatusConflict, "email already exists")
 			return

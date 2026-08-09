@@ -11,6 +11,8 @@ import (
 
 	api "backend/src/adapter/http"
 	domain "backend/src/adapter/http"
+	"backend/src/domain/model"
+	"backend/src/usecase"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -51,6 +53,15 @@ func (m *mockEventRepo) ListByMonth(ctx context.Context, year, month int, member
 	}
 	return []domain.Event{}, nil
 }
+func (m *mockEventRepo) ListByMonthApplication(ctx context.Context, memberID string, year, month int) ([]domain.Event, error) {
+	if year == 0 || month == 0 {
+		return nil, usecase.ErrEventMonthRequired
+	}
+	if month < 1 || month > 12 {
+		return nil, usecase.ErrEventMonthInvalid
+	}
+	return m.ListByMonth(ctx, year, month, memberID)
+}
 
 func (m *mockEventRepo) Update(ctx context.Context, event *domain.Event) error {
 	if m.updateFunc != nil {
@@ -86,6 +97,59 @@ func (m *mockEventRepo) ListViewers(ctx context.Context, eventID string) ([]doma
 		return m.listViewersFunc(ctx, eventID)
 	}
 	return []domain.EventViewer{}, nil
+}
+
+func (m *mockEventRepo) CreateApplication(ctx context.Context, memberID string, input usecase.EventCreateInput) (*domain.Event, error) {
+	event := &domain.Event{Title: input.Title, Description: input.Description, Status: input.Status, CreatedBy: memberID, StartTime: input.StartTime, EndTime: input.EndTime}
+	if err := m.Create(ctx, event); err != nil {
+		return nil, err
+	}
+	return event, nil
+}
+func (m *mockEventRepo) UpdateApplication(ctx context.Context, id, memberID string, admin bool, input usecase.EventUpdateInput) (*domain.Event, error) {
+	event, err := m.GetByID(ctx, id, memberID)
+	if err != nil {
+		return nil, err
+	}
+	if !admin && event.CreatedBy != memberID {
+		return nil, model.ErrNotEventOwner
+	}
+	if input.Title != "" {
+		event.Title = input.Title
+	}
+	if input.Description != "" {
+		event.Description = input.Description
+	}
+	if err := m.Update(ctx, event); err != nil {
+		return nil, err
+	}
+	return event, nil
+}
+func (m *mockEventRepo) DeleteApplication(ctx context.Context, id, memberID string, admin bool) error {
+	event, err := m.GetByID(ctx, id, memberID)
+	if err != nil {
+		return err
+	}
+	if !admin && event.CreatedBy != memberID {
+		return model.ErrNotEventOwner
+	}
+	return m.Delete(ctx, id)
+}
+func (m *mockEventRepo) AddViewerApplication(ctx context.Context, id, memberID, viewerID string, admin bool) error {
+	event, err := m.GetByID(ctx, id, memberID)
+	if err != nil {
+		return err
+	}
+	if !admin && event.CreatedBy != memberID {
+		return model.ErrNotEventOwner
+	}
+	return m.AddViewer(ctx, id, viewerID)
+}
+func (m *mockEventRepo) RemoveViewerApplication(ctx context.Context, id, memberID, viewerID string, admin bool) error {
+	return m.RemoveViewer(ctx, id, viewerID)
+}
+func (m *mockEventRepo) ListViewersApplication(ctx context.Context, id, memberID string, admin bool) ([]domain.EventViewer, error) {
+	return m.ListViewers(ctx, id)
 }
 
 func TestEvent_CreateEvent(t *testing.T) {

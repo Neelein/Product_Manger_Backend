@@ -14,6 +14,7 @@ import (
 	apphttp "backend/src/adapter/http"
 	"backend/src/adapter/postgres"
 	"backend/src/adapter/session"
+	"backend/src/adapter/storage"
 	"backend/src/infrastructure"
 	"backend/src/usecase"
 
@@ -72,12 +73,13 @@ func main() {
 	sessionRepo := session.NewCache(time.Hour)
 	productService := usecase.NewProductService(repo)
 	inventoryService := usecase.NewInventoryService(inventoryRepo)
-	memberService := usecase.NewMemberService(memberRepo)
+	memberService := usecase.NewMemberService(memberRepo, sessionRepo, codeRepo)
 	sessionService := usecase.NewSessionService(sessionRepo)
 	codeService := usecase.NewRegistrationCodeService(codeRepo)
 	categoryService := usecase.NewCategoryService(categoryRepo)
-	announcementService := usecase.NewAnnouncementService(postgres.NewAnnouncementRepository(pool))
-	chatService := usecase.NewChatService(postgres.NewChatRoomRepository(pool))
+	fileStorage := storage.LocalFileStorage{}
+	announcementService := usecase.NewAnnouncementService(postgres.NewAnnouncementRepository(pool), fileStorage)
+	chatService := usecase.NewChatService(postgres.NewChatRoomRepository(pool), fileStorage)
 	eventService := usecase.NewEventService(postgres.NewEventRepository(pool))
 	defer sessionRepo.Stop()
 

@@ -53,7 +53,7 @@ func TestLegacyPackagesAreRemoved(t *testing.T) {
 					t.Fatal(readErr)
 				}
 				for _, entry := range entries {
-					if entry.IsDir() && (entry.Name() == "model" || entry.Name() == "repository") {
+					if entry.IsDir() && (entry.Name() == "model" || entry.Name() == "repository" || entry.Name() == "entity") {
 						continue
 					}
 					t.Fatalf("legacy domain entry remains: %s", filepath.Join(path, entry.Name()))
@@ -160,6 +160,62 @@ func TestHTTPHandlersDoNotDependOnPostgresConcreteTypes(t *testing.T) {
 	}
 }
 
+func TestHTTPHandlersUseApplicationServicesOnly(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := filepath.Glob(filepath.Join(root, "src", "adapter", "http", "*_handler.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(data)
+		for _, forbidden := range []string{"h.repo", "repo usecase.", "codeRepo", "backend/src/domain/repository"} {
+			if strings.Contains(text, forbidden) {
+				t.Fatalf("HTTP handler %s exposes repository-shaped dependency %s", file, forbidden)
+			}
+		}
+		if strings.Contains(text, "usecase.Validate") {
+			t.Fatalf("HTTP handler %s calls an exported validation function directly", file)
+		}
+	}
+	checks := map[string][]string{
+		"event_handler.go":   {"CreatedBy !="},
+		"product_handler.go": {"detail.ID !=", "routeDetail"},
+		"chat_handler.go":    {"req.Page <", "req.Limit <", "len(req.MemberIDs) == 0"},
+	}
+	mutationCalls := map[string][]string{
+		"announcement_handler.go": {"h.service.Update(r.Context(), announcement)", "h.service.Delete(r.Context(), announcementID)"},
+		"inventory_handler.go":    {"h.service.UpdateInventory(r.Context(), inventory)", "h.service.UpdateItem(r.Context(), item)", "h.service.DeleteInventory(r.Context(), inventoryID)", "h.service.DeleteItem(r.Context(), itemID)"},
+		"product_handler.go":      {"h.service.UpdateOption(r.Context(), o)", "h.service.UpdateVariant(r.Context(), v)", "h.service.UpdateDetail(r.Context(), detail)", "h.service.UpdatePrice(r.Context(), price)", "h.service.DeleteOption(r.Context(), o.ID)", "h.service.DeleteVariant(r.Context(), v.ID)"},
+	}
+	for name, forbidden := range mutationCalls {
+		text := source(t, "src/adapter/http", name)
+		for _, pattern := range forbidden {
+			if strings.Contains(text, pattern) {
+				t.Fatalf("handler %s still performs legacy fetch/mutate workflow: %s", name, pattern)
+			}
+		}
+	}
+	for name, forbidden := range checks {
+		text := source(t, "src/adapter/http", name)
+		for _, pattern := range forbidden {
+			if strings.Contains(text, pattern) {
+				t.Fatalf("HTTP handler %s contains business-rule pattern %q", name, pattern)
+			}
+		}
+	}
+	services := source(t, "src/usecase/services.go")
+	if strings.Contains(services, "interface{ repository.") {
+		t.Fatal("application service interface embeds a repository port")
+	}
+}
+
 func TestProductionLayerBoundaries(t *testing.T) {
 	root, err := filepath.Abs(filepath.Join("..", "..", ".."))
 	if err != nil {
@@ -200,6 +256,29 @@ func TestProductionLayerBoundaries(t *testing.T) {
 		for _, importPath := range forbidden {
 			if strings.Contains(text, importPath) {
 				t.Fatalf("usecase %s imports %s", file, importPath)
+			}
+		}
+	}
+}
+
+func TestDomainEntitiesHaveNoAdapterDependencies(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := filepath.Glob(filepath.Join(root, "src", "domain", "entity", "*.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(data)
+		for _, forbidden := range []string{"backend/src/adapter", "backend/src/usecase", "net/http", "pgx"} {
+			if strings.Contains(text, forbidden) {
+				t.Fatalf("domain entity %s depends on %s", file, forbidden)
 			}
 		}
 	}
