@@ -6,8 +6,8 @@ import (
 	"log"
 	"time"
 
-	"backend/src/database"
-	"backend/src/domain"
+	"backend/src/adapter/postgres"
+	"backend/src/domain/model"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -25,9 +25,9 @@ func main() {
 
 	_, _ = pool.Exec(ctx, "TRUNCATE TABLE inventory_items, inventories, product_prices, product_details, products, categories, members CASCADE")
 
-	repo := database.NewProductRepositoryPGX(pool)
-	invRepo := database.NewInventoryRepositoryPGX(pool)
-	catRepo := database.NewCategoryRepositoryPGX(pool)
+	repo := postgres.NewProductRepositoryPGX(pool)
+	invRepo := postgres.NewInventoryRepositoryPGX(pool)
+	catRepo := postgres.NewCategoryRepositoryPGX(pool)
 
 	ticketCat, err := catRepo.Create(ctx, "ticket")
 	must(err)
@@ -35,10 +35,10 @@ func main() {
 	must(err)
 
 	// ── Product A: 演唱會門票 ──
-	p1 := domain.Product{Name: "周杰倫演唱會門票", Price: 3800, CategoryID: ticketCat.ID}
+	p1 := model.Product{Name: "周杰倫演唱會門票", Price: 3800, CategoryID: ticketCat.ID}
 	must(repo.Create(ctx, &p1))
 
-	d1 := domain.ProductDetail{
+	d1 := model.ProductDetail{
 		ProductID:         p1.ID,
 		Introduction:      "2026 年全新巡迴演唱會",
 		UsageInstructions: "憑 QR Code 入場",
@@ -46,7 +46,7 @@ func main() {
 	}
 	must(repo.CreateDetail(ctx, &d1))
 
-	priceVIP := domain.ProductPrice{
+	priceVIP := model.ProductPrice{
 		ProductDetailID: d1.ID,
 		Label:           "VIP 區",
 		Amount:          5800,
@@ -56,7 +56,7 @@ func main() {
 	must(repo.CreatePrice(ctx, &priceVIP))
 	fmt.Printf("✅ 商品 A (演唱會) — 價格 ID: %s, %s $%.0f\n", priceVIP.ID, priceVIP.Label, priceVIP.Amount)
 
-	priceStd := domain.ProductPrice{
+	priceStd := model.ProductPrice{
 		ProductDetailID: d1.ID,
 		Label:           "一般區",
 		Amount:          2800,
@@ -67,7 +67,7 @@ func main() {
 	fmt.Printf("✅ 商品 A (演唱會) — 價格 ID: %s, %s $%.0f\n", priceStd.ID, priceStd.Label, priceStd.Amount)
 
 	// ── 庫存：VIP 區 ──
-	invVIP := domain.Inventory{
+	invVIP := model.Inventory{
 		ProductPriceID: priceVIP.ID,
 		Status:         "銷售中",
 	}
@@ -75,7 +75,7 @@ func main() {
 	fmt.Printf("✅ 庫存總表 (VIP) — ID: %s\n", invVIP.ID)
 
 	for i := 1; i <= 8; i++ {
-		item := domain.InventoryItem{
+		item := model.InventoryItem{
 			InventoryID: invVIP.ID,
 			ItemCode:    fmt.Sprintf("VIP-%04d", i),
 			Status:      "可用",
@@ -85,7 +85,7 @@ func main() {
 		must(invRepo.CreateItem(ctx, &item))
 	}
 	for i := 9; i <= 10; i++ {
-		item := domain.InventoryItem{
+		item := model.InventoryItem{
 			InventoryID: invVIP.ID,
 			ItemCode:    fmt.Sprintf("VIP-%04d", i),
 			Status:      "出售",
@@ -97,14 +97,14 @@ func main() {
 	fmt.Printf("✅ 庫存明細 (VIP) — 10 筆 (可用 8, 出售 2)\n")
 
 	// ── 庫存：一般區 ──
-	invStd := domain.Inventory{
+	invStd := model.Inventory{
 		ProductPriceID: priceStd.ID,
 		Status:         "完售",
 	}
 	must(invRepo.CreateInventory(ctx, &invStd))
 
 	for i := 1; i <= 5; i++ {
-		item := domain.InventoryItem{
+		item := model.InventoryItem{
 			InventoryID: invStd.ID,
 			ItemCode:    fmt.Sprintf("STD-%04d", i),
 			Status:      "出售",
@@ -116,10 +116,10 @@ func main() {
 	fmt.Printf("✅ 庫存明細 (一般區) — 5 筆 (全部售出)\n")
 
 	// ── Product B: 電子書 ──
-	p2 := domain.Product{Name: "Go 語言實戰手冊", Price: 450, CategoryID: ebookCat.ID}
+	p2 := model.Product{Name: "Go 語言實戰手冊", Price: 450, CategoryID: ebookCat.ID}
 	must(repo.Create(ctx, &p2))
 
-	d2 := domain.ProductDetail{
+	d2 := model.ProductDetail{
 		ProductID:         p2.ID,
 		Introduction:      "從入門到進階的 Go 語言學習指南",
 		UsageInstructions: "購買後即可下載 PDF",
@@ -127,7 +127,7 @@ func main() {
 	}
 	must(repo.CreateDetail(ctx, &d2))
 
-	priceEbook := domain.ProductPrice{
+	priceEbook := model.ProductPrice{
 		ProductDetailID: d2.ID,
 		Label:           "標準版",
 		Amount:          450,
@@ -137,7 +137,7 @@ func main() {
 	must(repo.CreatePrice(ctx, &priceEbook))
 	fmt.Printf("✅ 商品 B (電子書) — 價格 ID: %s, $%.0f\n", priceEbook.ID, priceEbook.Amount)
 
-	priceBundle := domain.ProductPrice{
+	priceBundle := model.ProductPrice{
 		ProductDetailID: d2.ID,
 		Label:           "含原始碼套裝",
 		Amount:          780,
@@ -148,7 +148,7 @@ func main() {
 	fmt.Printf("✅ 商品 B (電子書) — 價格 ID: %s, $%.0f\n", priceBundle.ID, priceBundle.Amount)
 
 	// ── 庫存：標準版 ──
-	invEbook := domain.Inventory{
+	invEbook := model.Inventory{
 		ProductPriceID: priceEbook.ID,
 		Status:         "銷售中",
 	}
@@ -156,7 +156,7 @@ func main() {
 	fmt.Printf("✅ 庫存總表 (標準版) — ID: %s\n", invEbook.ID)
 
 	for i := 1; i <= 4; i++ {
-		item := domain.InventoryItem{
+		item := model.InventoryItem{
 			InventoryID: invEbook.ID,
 			ItemCode:    fmt.Sprintf("EB-STD-%04d", i),
 			Status:      "可用",
@@ -166,7 +166,7 @@ func main() {
 		must(invRepo.CreateItem(ctx, &item))
 	}
 	// 註銷 1 張
-	must(invRepo.CreateItem(ctx, &domain.InventoryItem{
+	must(invRepo.CreateItem(ctx, &model.InventoryItem{
 		InventoryID: invEbook.ID,
 		ItemCode:    "EB-STD-0005",
 		Status:      "註銷",
@@ -175,7 +175,7 @@ func main() {
 	}))
 	// 賣出 2 張
 	for i := 6; i <= 7; i++ {
-		item := domain.InventoryItem{
+		item := model.InventoryItem{
 			InventoryID: invEbook.ID,
 			ItemCode:    fmt.Sprintf("EB-STD-%04d", i),
 			Status:      "出售",
@@ -187,7 +187,7 @@ func main() {
 	fmt.Printf("✅ 庫存明細 (標準版) — 7 筆 (可用 4, 出售 2, 註銷 1)\n")
 
 	// ── 庫存：含原始碼套裝（無庫存項目）──
-	invBundle := domain.Inventory{
+	invBundle := model.Inventory{
 		ProductPriceID: priceBundle.ID,
 		Status:         "註銷",
 	}

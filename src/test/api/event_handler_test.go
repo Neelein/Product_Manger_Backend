@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"backend/src/api"
-	"backend/src/domain"
+	api "backend/src/adapter/http"
+	domain "backend/src/adapter/http"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -18,14 +18,14 @@ import (
 )
 
 type mockEventRepo struct {
-	createFunc      func(ctx context.Context, event *domain.Event) error
-	getByIDFunc     func(ctx context.Context, id string, memberID string) (*domain.Event, error)
-	listByMonthFunc func(ctx context.Context, year, month int, memberID string) ([]domain.Event, error)
-	updateFunc      func(ctx context.Context, event *domain.Event) error
-	deleteFunc      func(ctx context.Context, id string) error
-	addViewerFunc   func(ctx context.Context, eventID string, memberID string) error
+	createFunc       func(ctx context.Context, event *domain.Event) error
+	getByIDFunc      func(ctx context.Context, id string, memberID string) (*domain.Event, error)
+	listByMonthFunc  func(ctx context.Context, year, month int, memberID string) ([]domain.Event, error)
+	updateFunc       func(ctx context.Context, event *domain.Event) error
+	deleteFunc       func(ctx context.Context, id string) error
+	addViewerFunc    func(ctx context.Context, eventID string, memberID string) error
 	removeViewerFunc func(ctx context.Context, eventID string, memberID string) error
-	listViewersFunc func(ctx context.Context, eventID string) ([]domain.EventViewer, error)
+	listViewersFunc  func(ctx context.Context, eventID string) ([]domain.EventViewer, error)
 }
 
 func (m *mockEventRepo) Create(ctx context.Context, event *domain.Event) error {

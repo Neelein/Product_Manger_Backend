@@ -13,9 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"backend/src/api"
-	"backend/src/database"
-	"backend/src/domain"
+	api "backend/src/adapter/http"
+	domain "backend/src/adapter/http"
+	database "backend/src/adapter/postgres"
+	"backend/src/adapter/session"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -23,10 +24,10 @@ import (
 
 var codeSeq atomic.Uint64
 
-func setupMemberHandler() (*database.MemberRepositoryPGX, *database.SessionCache, *api.MemberHandler) {
+func setupMemberHandler() (*database.MemberRepositoryPGX, *session.SessionCache, *api.MemberHandler) {
 	memberRepo := database.NewMemberRepositoryPGX(testPool)
-	sessionCache := database.NewSessionCache(time.Hour)
-	handler := api.NewMemberHandler(memberRepo, sessionCache, database.NewRegistrationCodeRepositoryPGX(testPool))
+	sessionCache := session.NewSessionCache(time.Hour)
+	handler := composeMemberHandler(memberRepo, sessionCache, database.NewRegistrationCodeRepositoryPGX(testPool))
 	return memberRepo, sessionCache, handler
 }
 

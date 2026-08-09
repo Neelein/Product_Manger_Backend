@@ -1,0 +1,31 @@
+package model
+
+import "errors"
+
+var (
+	ErrProductNotFound         = errors.New("product not found")
+	ErrMemberNotFound          = errors.New("member not found")
+	ErrEmailAlreadyExists      = errors.New("email already exists")
+	ErrInvalidCredentials      = errors.New("invalid credentials")
+	ErrDetailNotFound          = errors.New("detail not found")
+	ErrPriceNotFound           = errors.New("price not found")
+	ErrInventoryNotFound       = errors.New("inventory not found")
+	ErrInventoryItemNotFound   = errors.New("inventory item not found")
+	ErrAnnouncementNotFound    = errors.New("announcement not found")
+	ErrChatRoomNotFound        = errors.New("chat room not found")
+	ErrChatMessageNotFound     = errors.New("chat message not found")
+	ErrNotRoomMember           = errors.New("user is not a member of this room")
+	ErrEventNotFound           = errors.New("event not found")
+	ErrEventViewerNotFound     = errors.New("event viewer not found")
+	ErrInvalidRegistrationCode = errors.New("invalid registration code")
+	ErrRegistrationCodeUsed    = errors.New("registration code already used")
+	ErrCategoryNotFound        = errors.New("category not found")
+	ErrCategoryInUse           = errors.New("category is in use")
+	ErrCategoryNameExists      = errors.New("category name already exists")
+	ErrForbidden               = errors.New("forbidden")
+	ErrProductOptionNotFound   = errors.New("product option not found")
+	ErrProductVariantNotFound  = errors.New("product variant not found")
+	ErrDuplicateProductVariant = errors.New("duplicate product variant")
+	ErrInvalidProductVariant   = errors.New("invalid product variant")
+	ErrNotEventOwner           = errors.New("not the event owner")
+)

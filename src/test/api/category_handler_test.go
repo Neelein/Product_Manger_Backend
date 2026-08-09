@@ -13,9 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"backend/src/api"
-	"backend/src/database"
-	"backend/src/domain"
+	api "backend/src/adapter/http"
+	domain "backend/src/adapter/http"
+	database "backend/src/adapter/postgres"
+	"backend/src/adapter/session"
 
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
@@ -24,11 +25,11 @@ import (
 
 var categorySeq atomic.Uint64
 
-func setupCategoryRouter() (*database.MemberRepositoryPGX, *database.SessionCache, *database.CategoryRepositoryPGX, *mux.Router) {
+func setupCategoryRouter() (*database.MemberRepositoryPGX, *session.SessionCache, *database.CategoryRepositoryPGX, *mux.Router) {
 	memberRepo := database.NewMemberRepositoryPGX(testPool)
-	sessionCache := database.NewSessionCache(time.Hour)
+	sessionCache := session.NewSessionCache(time.Hour)
 	repo := database.NewCategoryRepositoryPGX(testPool)
-	handler := api.NewCategoryHandler(repo)
+	handler := composeCategoryHandler(repo)
 	auth := api.AuthMiddleware(sessionCache, memberRepo)
 
 	r := mux.NewRouter()

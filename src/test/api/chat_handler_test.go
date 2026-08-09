@@ -12,9 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"backend/src/api"
-	"backend/src/database"
-	"backend/src/domain"
+	api "backend/src/adapter/http"
+	domain "backend/src/adapter/http"
+	database "backend/src/adapter/postgres"
+	"backend/src/adapter/session"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -22,15 +23,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupChatTest() (*database.ChatRoomRepositoryPGX, *database.MemberRepositoryPGX, *database.SessionCache, *api.ChatRoomHandler) {
+func setupChatTest() (*database.ChatRoomRepositoryPGX, *database.MemberRepositoryPGX, *session.SessionCache, *api.ChatRoomHandler) {
 	repo := database.NewChatRoomRepositoryPGX(testPool)
 	memberRepo := database.NewMemberRepositoryPGX(testPool)
-	sessionCache := database.NewSessionCache(time.Hour)
-	handler := api.NewChatRoomHandler(repo)
+	sessionCache := session.NewSessionCache(time.Hour)
+	handler := composeChatHandler(repo)
 	return repo, memberRepo, sessionCache, handler
 }
 
-func createChatMember(t *testing.T, memberRepo *database.MemberRepositoryPGX, sessionCache *database.SessionCache) *domain.Member {
+func createChatMember(t *testing.T, memberRepo *database.MemberRepositoryPGX, sessionCache *session.SessionCache) *domain.Member {
 	t.Helper()
 
 	member := domain.Member{

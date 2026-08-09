@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"backend/src/api"
+	api "backend/src/adapter/http"
 
 	"github.com/stretchr/testify/assert"
 )

@@ -1,0 +1,5 @@
+# Clean Architecture Decision
+
+The backend will keep the existing `src` root and introduce explicit Clean Architecture boundaries: `domain/model`, `domain/repository`, `usecase`, `adapter/http`, `adapter/postgres`, `adapter/session`, `adapter/storage`, and `infrastructure`. Models will no longer contain HTTP DTOs, handlers will depend on use cases, and persistence adapters will implement repository ports. Existing API routes and response contracts remain stable while application validation and authorization move into use cases. The final cleanup removes the legacy API, database, and root-domain packages rather than retaining compatibility wrappers.
+
+The final boundary cleanup moves production imports to `domain/model` and `domain/repository`, keeps HTTP DTOs in `adapter/http`, and exposes root-domain aliases only for legacy compatibility packages and tests. Architecture tests parse production imports to prevent direct dependencies on the legacy `src/api`, `src/database`, or root domain packages.
