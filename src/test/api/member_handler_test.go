@@ -17,6 +17,7 @@ import (
 	domain "backend/src/adapter/http"
 	database "backend/src/adapter/postgres"
 	"backend/src/adapter/session"
+	"backend/src/usecase"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -363,7 +364,7 @@ func TestHandler_SessionIdleExpiry(t *testing.T) {
 		w.Write([]byte(`{"ok":"true"}`))
 	})
 
-	auth := api.AuthMiddleware(sessionCache, memberRepo)
+	auth := api.AuthMiddleware(sessionCache, usecase.NewMemberService(memberRepo, sessionCache))
 	req := httptest.NewRequest(http.MethodGet, "/api/members/me", nil)
 	req.AddCookie(sessionCookie)
 	w = httptest.NewRecorder()

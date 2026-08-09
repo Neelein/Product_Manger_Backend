@@ -271,9 +271,6 @@ func NewRegistrationCodeService(repo repository.RegistrationCode) RegistrationCo
 	return &registrationCodeService{repo}
 }
 func (s *registrationCodeService) CreateApplication(ctx context.Context, memberID, code string) (*model.RegistrationCode, error) {
-	if strings.TrimSpace(code) == "" {
-		return nil, ErrRegistrationCodeRequired
-	}
 	return s.RegistrationCode.Create(ctx, memberID, code)
 }
 

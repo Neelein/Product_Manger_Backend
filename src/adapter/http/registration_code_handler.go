@@ -31,10 +31,6 @@ func (h *RegistrationCodeHandler) CreateCode(w http.ResponseWriter, r *http.Requ
 	}
 
 	code, err := h.service.CreateApplication(r.Context(), member.ID, req.Code)
-	if err == usecase.ErrRegistrationCodeRequired {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
