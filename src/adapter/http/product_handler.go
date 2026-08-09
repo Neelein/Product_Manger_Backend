@@ -9,12 +9,11 @@ import (
 
 	"backend/src/usecase"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 )
 
 type ProductHandler struct {
-	repo usecase.ProductService
+	service usecase.ProductService
 }
 
 func variantErrorStatus(err error) int {
@@ -55,35 +54,12 @@ func variantErrorMessage(err error) string {
 	}
 }
 
-func validVariantInput(req CreateProductVariantRequest) bool {
-	if uuid.Validate(req.ProductPriceID) != nil {
-		return false
-	}
-	for _, optionID := range req.OptionIDs {
-		if uuid.Validate(optionID) != nil {
-			return false
-		}
-	}
-	return true
-}
-
-func (h *ProductHandler) routeDetail(r *http.Request) (*ProductDetail, error) {
-	detail, err := h.repo.GetDetailByProductID(r.Context(), mux.Vars(r)["productId"])
-	if err != nil {
-		return nil, err
-	}
-	if id := mux.Vars(r)["detailId"]; id != "" && id != detail.ID {
-		return nil, ErrDetailNotFound
-	}
-	return detail, nil
-}
-
 func (h *ProductHandler) CreateOption(w http.ResponseWriter, r *http.Request) {
 	if MemberFromContext(r.Context()) == nil {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	detail, err := h.routeDetail(r)
+	detail, err := h.service.GetDetailForRoute(r.Context(), mux.Vars(r)["productId"], mux.Vars(r)["detailId"])
 	if err != nil {
 		writeError(w, http.StatusNotFound, variantErrorMessage(err))
 		return
@@ -94,7 +70,7 @@ func (h *ProductHandler) CreateOption(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	o := ProductOption{ProductDetailID: detail.ID, Name: req.Name, Value: req.Value}
-	if err := h.repo.CreateOption(r.Context(), &o); err != nil {
+	if err := h.service.CreateOption(r.Context(), &o); err != nil {
 		writeError(w, variantErrorStatus(err), variantErrorMessage(err))
 		return
 	}
@@ -102,12 +78,12 @@ func (h *ProductHandler) CreateOption(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ProductHandler) ListOptions(w http.ResponseWriter, r *http.Request) {
-	detail, err := h.routeDetail(r)
+	detail, err := h.service.GetDetailForRoute(r.Context(), mux.Vars(r)["productId"], mux.Vars(r)["detailId"])
 	if err != nil {
 		writeError(w, http.StatusNotFound, variantErrorMessage(err))
 		return
 	}
-	options, err := h.repo.ListOptionsByDetailID(r.Context(), detail.ID)
+	options, err := h.service.ListOptionsByDetailID(r.Context(), detail.ID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -115,14 +91,14 @@ func (h *ProductHandler) ListOptions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, ProductOptionListResponse{Options: options})
 }
 func (h *ProductHandler) GetOption(w http.ResponseWriter, r *http.Request) {
-	o, err := h.repo.GetOptionByID(r.Context(), mux.Vars(r)["optionId"])
+	detail, err := h.service.GetDetailForRoute(r.Context(), mux.Vars(r)["productId"], mux.Vars(r)["detailId"])
 	if err != nil {
-		writeError(w, variantErrorStatus(err), variantErrorMessage(err))
+		writeError(w, http.StatusNotFound, variantErrorMessage(ErrProductOptionNotFound))
 		return
 	}
-	detail, err := h.routeDetail(r)
-	if err != nil || detail.ID != o.ProductDetailID {
-		writeError(w, http.StatusNotFound, variantErrorMessage(ErrProductOptionNotFound))
+	o, err := h.service.GetOptionForDetail(r.Context(), detail.ID, mux.Vars(r)["optionId"])
+	if err != nil {
+		writeError(w, variantErrorStatus(err), variantErrorMessage(err))
 		return
 	}
 	writeJSON(w, http.StatusOK, ProductOptionResponse{Option: *o})
@@ -132,13 +108,8 @@ func (h *ProductHandler) UpdateOption(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	o, err := h.repo.GetOptionByID(r.Context(), mux.Vars(r)["optionId"])
+	detail, err := h.service.GetDetailForRoute(r.Context(), mux.Vars(r)["productId"], mux.Vars(r)["detailId"])
 	if err != nil {
-		writeError(w, variantErrorStatus(err), variantErrorMessage(err))
-		return
-	}
-	detail, err := h.routeDetail(r)
-	if err != nil || detail.ID != o.ProductDetailID {
 		writeError(w, http.StatusNotFound, variantErrorMessage(ErrProductOptionNotFound))
 		return
 	}
@@ -147,8 +118,8 @@ func (h *ProductHandler) UpdateOption(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	o.Name, o.Value = req.Name, req.Value
-	if err = h.repo.UpdateOption(r.Context(), o); err != nil {
+	o, err := h.service.UpdateOptionApplication(r.Context(), detail.ID, mux.Vars(r)["optionId"], usecase.ProductOptionUpdateInput{Name: req.Name, Value: req.Value})
+	if err != nil {
 		writeError(w, variantErrorStatus(err), variantErrorMessage(err))
 		return
 	}
@@ -159,17 +130,12 @@ func (h *ProductHandler) DeleteOption(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	o, err := h.repo.GetOptionByID(r.Context(), mux.Vars(r)["optionId"])
+	detail, err := h.service.GetDetailForRoute(r.Context(), mux.Vars(r)["productId"], mux.Vars(r)["detailId"])
 	if err != nil {
-		writeError(w, variantErrorStatus(err), variantErrorMessage(err))
-		return
-	}
-	detail, err := h.routeDetail(r)
-	if err != nil || detail.ID != o.ProductDetailID {
 		writeError(w, http.StatusNotFound, ErrProductOptionNotFound.Error())
 		return
 	}
-	if err := h.repo.DeleteOption(r.Context(), o.ID); err != nil {
+	if err := h.service.DeleteOptionApplication(r.Context(), detail.ID, mux.Vars(r)["optionId"]); err != nil {
 		writeError(w, variantErrorStatus(err), variantErrorMessage(err))
 		return
 	}
@@ -181,7 +147,7 @@ func (h *ProductHandler) CreateVariant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	detail, err := h.routeDetail(r)
+	detail, err := h.service.GetDetailForRoute(r.Context(), mux.Vars(r)["productId"], mux.Vars(r)["detailId"])
 	if err != nil {
 		writeError(w, http.StatusNotFound, variantErrorMessage(err))
 		return
@@ -191,24 +157,20 @@ func (h *ProductHandler) CreateVariant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if !validVariantInput(req) {
-		writeError(w, http.StatusBadRequest, variantErrorMessage(ErrInvalidProductVariant))
-		return
-	}
 	v := ProductVariant{ProductDetailID: detail.ID, ProductPriceID: req.ProductPriceID, SKU: req.SKU, Status: req.Status, OptionIDs: req.OptionIDs}
-	if err = h.repo.CreateVariant(r.Context(), &v); err != nil {
+	if err = h.service.CreateVariant(r.Context(), &v); err != nil {
 		writeError(w, variantErrorStatus(err), variantErrorMessage(err))
 		return
 	}
 	writeJSON(w, http.StatusCreated, ProductVariantResponse{Variant: v})
 }
 func (h *ProductHandler) ListVariants(w http.ResponseWriter, r *http.Request) {
-	detail, err := h.routeDetail(r)
+	detail, err := h.service.GetDetailForRoute(r.Context(), mux.Vars(r)["productId"], mux.Vars(r)["detailId"])
 	if err != nil {
 		writeError(w, http.StatusNotFound, variantErrorMessage(err))
 		return
 	}
-	vs, err := h.repo.ListVariantsByDetailID(r.Context(), detail.ID)
+	vs, err := h.service.ListVariantsByDetailID(r.Context(), detail.ID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, variantErrorMessage(err))
 		return
@@ -216,14 +178,14 @@ func (h *ProductHandler) ListVariants(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, ProductVariantListResponse{Variants: vs})
 }
 func (h *ProductHandler) GetVariant(w http.ResponseWriter, r *http.Request) {
-	v, err := h.repo.GetVariantByID(r.Context(), mux.Vars(r)["variantId"])
+	detail, err := h.service.GetDetailForRoute(r.Context(), mux.Vars(r)["productId"], mux.Vars(r)["detailId"])
 	if err != nil {
-		writeError(w, variantErrorStatus(err), variantErrorMessage(err))
+		writeError(w, http.StatusNotFound, variantErrorMessage(ErrProductVariantNotFound))
 		return
 	}
-	detail, err := h.routeDetail(r)
-	if err != nil || detail.ID != v.ProductDetailID {
-		writeError(w, http.StatusNotFound, variantErrorMessage(ErrProductVariantNotFound))
+	v, err := h.service.GetVariantForDetail(r.Context(), detail.ID, mux.Vars(r)["variantId"])
+	if err != nil {
+		writeError(w, variantErrorStatus(err), variantErrorMessage(err))
 		return
 	}
 	writeJSON(w, http.StatusOK, ProductVariantResponse{Variant: *v})
@@ -233,13 +195,8 @@ func (h *ProductHandler) UpdateVariant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	v, err := h.repo.GetVariantByID(r.Context(), mux.Vars(r)["variantId"])
+	detail, err := h.service.GetDetailForRoute(r.Context(), mux.Vars(r)["productId"], mux.Vars(r)["detailId"])
 	if err != nil {
-		writeError(w, variantErrorStatus(err), variantErrorMessage(err))
-		return
-	}
-	detail, err := h.routeDetail(r)
-	if err != nil || detail.ID != v.ProductDetailID {
 		writeError(w, http.StatusNotFound, variantErrorMessage(ErrProductVariantNotFound))
 		return
 	}
@@ -248,12 +205,8 @@ func (h *ProductHandler) UpdateVariant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if !validVariantInput(CreateProductVariantRequest{ProductPriceID: req.ProductPriceID, OptionIDs: req.OptionIDs}) {
-		writeError(w, http.StatusBadRequest, variantErrorMessage(ErrInvalidProductVariant))
-		return
-	}
-	v.ProductPriceID, v.SKU, v.Status, v.OptionIDs = req.ProductPriceID, req.SKU, req.Status, req.OptionIDs
-	if err = h.repo.UpdateVariant(r.Context(), v); err != nil {
+	v, err := h.service.UpdateVariantApplication(r.Context(), detail.ID, mux.Vars(r)["variantId"], usecase.ProductVariantUpdateInput{ProductPriceID: req.ProductPriceID, SKU: req.SKU, Status: req.Status, OptionIDs: req.OptionIDs})
+	if err != nil {
 		writeError(w, variantErrorStatus(err), variantErrorMessage(err))
 		return
 	}
@@ -264,17 +217,12 @@ func (h *ProductHandler) DeleteVariant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	v, err := h.repo.GetVariantByID(r.Context(), mux.Vars(r)["variantId"])
+	detail, err := h.service.GetDetailForRoute(r.Context(), mux.Vars(r)["productId"], mux.Vars(r)["detailId"])
 	if err != nil {
-		writeError(w, variantErrorStatus(err), variantErrorMessage(err))
-		return
-	}
-	detail, err := h.routeDetail(r)
-	if err != nil || detail.ID != v.ProductDetailID {
 		writeError(w, http.StatusNotFound, variantErrorMessage(ErrProductVariantNotFound))
 		return
 	}
-	if err := h.repo.DeleteVariant(r.Context(), v.ID); err != nil {
+	if err := h.service.DeleteVariantApplication(r.Context(), detail.ID, mux.Vars(r)["variantId"]); err != nil {
 		writeError(w, variantErrorStatus(err), variantErrorMessage(err))
 		return
 	}
@@ -282,7 +230,7 @@ func (h *ProductHandler) DeleteVariant(w http.ResponseWriter, r *http.Request) {
 }
 
 func NewProductHandler(service usecase.ProductService) *ProductHandler {
-	return &ProductHandler{repo: service}
+	return &ProductHandler{service: service}
 }
 
 func (h *ProductHandler) CreateProduct(
@@ -309,7 +257,7 @@ func (h *ProductHandler) CreateProduct(
 		CreatedBy:  member.ID,
 	}
 
-	if err := h.repo.Create(r.Context(), &product); err != nil {
+	if err := h.service.Create(r.Context(), &product); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -321,7 +269,7 @@ func (h *ProductHandler) ListProducts(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
-	products, err := h.repo.List(r.Context())
+	products, err := h.service.List(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -336,7 +284,7 @@ func (h *ProductHandler) GetProduct(
 ) {
 	productID := mux.Vars(r)["productId"]
 
-	product, err := h.repo.GetByID(r.Context(), productID)
+	product, err := h.service.GetByID(r.Context(), productID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
@@ -365,7 +313,7 @@ func (h *ProductHandler) UpdateProduct(
 		CategoryID: req.CategoryID,
 	}
 
-	if err := h.repo.Update(r.Context(), &product); err != nil {
+	if err := h.service.Update(r.Context(), &product); err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
@@ -379,7 +327,7 @@ func (h *ProductHandler) DeleteProduct(
 ) {
 	productID := mux.Vars(r)["productId"]
 
-	if err := h.repo.Delete(r.Context(), productID); err != nil {
+	if err := h.service.Delete(r.Context(), productID); err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
@@ -412,7 +360,7 @@ func (h *ProductHandler) CreateDetail(
 		ReturnPolicy:      req.ReturnPolicy,
 	}
 
-	if err := h.repo.CreateDetail(r.Context(), &detail); err != nil {
+	if err := h.service.CreateDetail(r.Context(), &detail); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -446,7 +394,7 @@ func (h *ProductHandler) CreatePrice(
 		SortOrder:       req.SortOrder,
 	}
 
-	if err := h.repo.CreatePrice(r.Context(), &price); err != nil {
+	if err := h.service.CreatePrice(r.Context(), &price); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -460,7 +408,7 @@ func (h *ProductHandler) GetDetail(
 ) {
 	productID := mux.Vars(r)["productId"]
 
-	detail, err := h.repo.GetDetailByProductID(r.Context(), productID)
+	detail, err := h.service.GetDetailByProductID(r.Context(), productID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
@@ -481,23 +429,14 @@ func (h *ProductHandler) UpdateDetail(
 
 	productID := mux.Vars(r)["productId"]
 
-	detail, err := h.repo.GetDetailByProductID(r.Context(), productID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
-		return
-	}
-
 	var req UpdateDetailRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
-	detail.Introduction = req.Introduction
-	detail.UsageInstructions = req.UsageInstructions
-	detail.ReturnPolicy = req.ReturnPolicy
-
-	if err := h.repo.UpdateDetail(r.Context(), detail); err != nil {
+	detail, err := h.service.UpdateDetailApplication(r.Context(), productID, usecase.ProductDetailUpdateInput{Introduction: req.Introduction, UsageInstructions: req.UsageInstructions, ReturnPolicy: req.ReturnPolicy})
+	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
@@ -511,13 +450,13 @@ func (h *ProductHandler) ListPrices(
 ) {
 	productID := mux.Vars(r)["productId"]
 
-	detail, err := h.repo.GetDetailByProductID(r.Context(), productID)
+	detail, err := h.service.GetDetailByProductID(r.Context(), productID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
 
-	prices, err := h.repo.GetPricesByDetailID(r.Context(), detail.ID)
+	prices, err := h.service.GetPricesByDetailID(r.Context(), detail.ID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -532,7 +471,7 @@ func (h *ProductHandler) GetPrice(
 ) {
 	priceID := mux.Vars(r)["priceId"]
 
-	price, err := h.repo.GetPriceByID(r.Context(), priceID)
+	price, err := h.service.GetPriceByID(r.Context(), priceID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
@@ -553,24 +492,14 @@ func (h *ProductHandler) UpdatePrice(
 
 	priceID := mux.Vars(r)["priceId"]
 
-	price, err := h.repo.GetPriceByID(r.Context(), priceID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
-		return
-	}
-
 	var req UpdatePriceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
-	price.Label = req.Label
-	price.Amount = req.Amount
-	price.Currency = req.Currency
-	price.SortOrder = req.SortOrder
-
-	if err := h.repo.UpdatePrice(r.Context(), price); err != nil {
+	price, err := h.service.UpdatePriceApplication(r.Context(), priceID, usecase.ProductPriceUpdateInput{Label: req.Label, Amount: req.Amount, Currency: req.Currency, SortOrder: req.SortOrder})
+	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}

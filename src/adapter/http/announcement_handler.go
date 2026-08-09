@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,38 +16,28 @@ import (
 )
 
 type AnnouncementHandler struct {
-	repo usecase.AnnouncementService
+	service usecase.AnnouncementService
 }
 
 func NewAnnouncementHandler(service usecase.AnnouncementService) *AnnouncementHandler {
-	return &AnnouncementHandler{repo: service}
+	return &AnnouncementHandler{service: service}
 }
 
-func saveUploadedFile(r *http.Request, field string, uploadDir string) (string, error) {
+func prepareUploadedFile(r *http.Request, field string, uploadDir string) (string, *usecase.UploadInput, error) {
 	file, header, err := r.FormFile(field)
 	if err != nil {
-		return "", nil
+		return "", nil, nil
 	}
 	defer file.Close()
 
 	ext := filepath.Ext(header.Filename)
 	filename := uuid.New().String() + ext
 
-	if err := os.MkdirAll(uploadDir, 0755); err != nil {
-		return "", fmt.Errorf("creating upload directory: %w", err)
-	}
-
-	dst, err := os.Create(filepath.Join(uploadDir, filename))
+	content, err := io.ReadAll(file)
 	if err != nil {
-		return "", fmt.Errorf("creating file: %w", err)
+		return "", nil, fmt.Errorf("reading file: %w", err)
 	}
-	defer dst.Close()
-
-	if _, err := io.Copy(dst, file); err != nil {
-		return "", fmt.Errorf("writing file: %w", err)
-	}
-
-	return filename, nil
+	return filename, &usecase.UploadInput{Directory: uploadDir, Filename: filename, Content: bytes.NewReader(content)}, nil
 }
 
 func (h *AnnouncementHandler) CreateAnnouncement(w http.ResponseWriter, r *http.Request) {
@@ -64,13 +55,8 @@ func (h *AnnouncementHandler) CreateAnnouncement(w http.ResponseWriter, r *http.
 	title := r.FormValue("title")
 	content := r.FormValue("content")
 
-	if title == "" || content == "" {
-		writeError(w, http.StatusBadRequest, "title and content are required")
-		return
-	}
-
 	imagePath := ""
-	filename, err := saveUploadedFile(r, "image", filepath.Join(os.Getenv("MEDIA_ROOT"), "images/announcements"))
+	filename, upload, err := prepareUploadedFile(r, "image", filepath.Join(os.Getenv("MEDIA_ROOT"), "images/announcements"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -86,7 +72,16 @@ func (h *AnnouncementHandler) CreateAnnouncement(w http.ResponseWriter, r *http.
 		PublisherID: member.ID,
 	}
 
-	if err := h.repo.Create(r.Context(), &announcement); err != nil {
+	if upload != nil {
+		if err := h.service.CreateApplication(r.Context(), &announcement, *upload); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	} else if err := h.service.CreateApplication(r.Context(), &announcement); err != nil {
+		if err == usecase.ErrInvalidAnnouncement {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -100,69 +95,55 @@ func (h *AnnouncementHandler) ListAnnouncements(w http.ResponseWriter, r *http.R
 	yearStr := r.URL.Query().Get("year")
 	monthStr := r.URL.Query().Get("month")
 
-	page := 1
-	limit := 20
-
+	page := 0
+	limit := 0
 	if pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+		if p, err := strconv.Atoi(pageStr); err == nil {
 			page = p
 		}
 	}
 	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+		if l, err := strconv.Atoi(limitStr); err == nil {
 			limit = l
 		}
 	}
-
-	offset := (page - 1) * limit
-
-	// If year and month are provided, filter by month
+	var year, month *int
 	if yearStr != "" && monthStr != "" {
-		year, err := strconv.Atoi(yearStr)
+		y, err := strconv.Atoi(yearStr)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "invalid year")
 			return
 		}
 
-		month, err := strconv.Atoi(monthStr)
-		if err != nil || month < 1 || month > 12 {
+		m, err := strconv.Atoi(monthStr)
+		if err != nil {
 			writeError(w, http.StatusBadRequest, "invalid month")
 			return
 		}
-
-		announcements, total, err := h.repo.ListByMonth(r.Context(), year, month, limit, offset)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
+		year, month = &y, &m
+	}
+	result, err := h.service.ListPage(r.Context(), page, limit, year, month)
+	if err != nil {
+		if err == usecase.ErrEventMonthInvalid {
+			writeError(w, http.StatusBadRequest, "invalid month")
 			return
 		}
-
-		writeJSON(w, http.StatusOK, AnnouncementListResponse{
-			Announcements: announcements,
-			Total:         total,
-			Page:          page,
-			Limit:         limit,
-		})
-		return
-	}
-
-	announcements, total, err := h.repo.List(r.Context(), limit, offset)
-	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	writeJSON(w, http.StatusOK, AnnouncementListResponse{
-		Announcements: announcements,
-		Total:         total,
-		Page:          page,
-		Limit:         limit,
+		Announcements: result.Announcements,
+		Total:         result.Total,
+		Page:          result.Page,
+		Limit:         result.Limit,
 	})
 }
 
 func (h *AnnouncementHandler) GetAnnouncement(w http.ResponseWriter, r *http.Request) {
 	announcementID := mux.Vars(r)["announcementId"]
 
-	announcement, err := h.repo.GetByID(r.Context(), announcementID)
+	announcement, err := h.service.GetByID(r.Context(), announcementID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
@@ -180,12 +161,6 @@ func (h *AnnouncementHandler) UpdateAnnouncement(w http.ResponseWriter, r *http.
 
 	announcementID := mux.Vars(r)["announcementId"]
 
-	announcement, err := h.repo.GetByID(r.Context(), announcementID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
-		return
-	}
-
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid form data")
 		return
@@ -195,25 +170,22 @@ func (h *AnnouncementHandler) UpdateAnnouncement(w http.ResponseWriter, r *http.
 	content := r.FormValue("content")
 	imagePath := r.FormValue("image_path")
 
-	if title != "" {
-		announcement.Title = title
-	}
-	if content != "" {
-		announcement.Content = content
-	}
-
-	filename, err := saveUploadedFile(r, "image", filepath.Join(os.Getenv("MEDIA_ROOT"), "images/announcements"))
+	filename, upload, err := prepareUploadedFile(r, "image", filepath.Join(os.Getenv("MEDIA_ROOT"), "images/announcements"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if filename != "" {
-		announcement.ImagePath = os.Getenv("API_DOMAIN") + "/media/images/announcements/" + filename
-	} else if imagePath != "" {
-		announcement.ImagePath = imagePath
+		imagePath = os.Getenv("API_DOMAIN") + "/media/images/announcements/" + filename
 	}
-
-	if err := h.repo.Update(r.Context(), announcement); err != nil {
+	input := usecase.AnnouncementUpdateInput{Title: title, Content: content, ImagePath: imagePath}
+	var announcement *Announcement
+	if upload != nil {
+		announcement, err = h.service.UpdateAnnouncementApplication(r.Context(), announcementID, input, *upload)
+	} else {
+		announcement, err = h.service.UpdateAnnouncementApplication(r.Context(), announcementID, input)
+	}
+	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
@@ -230,7 +202,7 @@ func (h *AnnouncementHandler) DeleteAnnouncement(w http.ResponseWriter, r *http.
 
 	announcementID := mux.Vars(r)["announcementId"]
 
-	if err := h.repo.Delete(r.Context(), announcementID); err != nil {
+	if err := h.service.DeleteAnnouncementApplication(r.Context(), announcementID); err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}

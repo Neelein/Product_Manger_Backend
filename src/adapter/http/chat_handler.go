@@ -14,11 +14,11 @@ import (
 )
 
 type ChatRoomHandler struct {
-	repo usecase.ChatService
+	service usecase.ChatService
 }
 
 func NewChatRoomHandler(service usecase.ChatService) *ChatRoomHandler {
-	return &ChatRoomHandler{repo: service}
+	return &ChatRoomHandler{service: service}
 }
 
 func (h *ChatRoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
@@ -34,24 +34,18 @@ func (h *ChatRoomHandler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Name == "" {
-		writeError(w, http.StatusBadRequest, "name is required")
-		return
-	}
-
 	room := ChatRoom{
 		ID:        uuid.New().String(),
 		Name:      req.Name,
 		CreatedBy: member.ID,
 	}
 
-	if err := h.repo.CreateRoom(r.Context(), &room); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	roomWithMeta, err := h.repo.GetRoomByID(r.Context(), room.ID, member.ID)
+	roomWithMeta, err := h.service.CreateRoomApplication(r.Context(), &room, member.ID)
 	if err != nil {
+		if err == usecase.ErrInvalidChatName {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -78,13 +72,17 @@ func (h *ChatRoomHandler) ListRooms(w http.ResponseWriter, r *http.Request) {
 		}
 
 		month, err := strconv.Atoi(monthStr)
-		if err != nil || month < 1 || month > 12 {
+		if err != nil {
 			writeError(w, http.StatusBadRequest, "invalid month")
 			return
 		}
 
-		rooms, err := h.repo.ListRoomsByMemberByMonth(r.Context(), member.ID, year, month)
+		rooms, err := h.service.ListRoomsByMemberByMonth(r.Context(), member.ID, year, month)
 		if err != nil {
+			if err == usecase.ErrEventMonthInvalid {
+				writeError(w, http.StatusBadRequest, "invalid month")
+				return
+			}
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -93,7 +91,7 @@ func (h *ChatRoomHandler) ListRooms(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rooms, err := h.repo.ListRoomsByMember(r.Context(), member.ID)
+	rooms, err := h.service.ListRoomsByMember(r.Context(), member.ID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -111,7 +109,7 @@ func (h *ChatRoomHandler) GetRoom(w http.ResponseWriter, r *http.Request) {
 
 	roomID := mux.Vars(r)["roomId"]
 
-	room, err := h.repo.GetRoomByID(r.Context(), roomID, member.ID)
+	room, err := h.service.GetRoomByID(r.Context(), roomID, member.ID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
@@ -135,18 +133,12 @@ func (h *ChatRoomHandler) UpdateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Name == "" {
-		writeError(w, http.StatusBadRequest, "name is required")
-		return
-	}
-
-	if err := h.repo.UpdateRoom(r.Context(), roomID, req.Name); err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
-		return
-	}
-
-	room, err := h.repo.GetRoomByID(r.Context(), roomID, member.ID)
+	room, err := h.service.UpdateRoomApplication(r.Context(), roomID, req.Name, member.ID)
 	if err != nil {
+		if err == usecase.ErrInvalidChatName {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
@@ -163,7 +155,7 @@ func (h *ChatRoomHandler) DeleteRoom(w http.ResponseWriter, r *http.Request) {
 
 	roomID := mux.Vars(r)["roomId"]
 
-	if err := h.repo.DeleteRoom(r.Context(), roomID); err != nil {
+	if err := h.service.DeleteRoom(r.Context(), roomID); err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
@@ -188,12 +180,11 @@ func (h *ChatRoomHandler) AddMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(req.MemberIDs) == 0 {
-		writeError(w, http.StatusBadRequest, "member_ids is required")
-		return
-	}
-
-	if err := h.repo.AddMembers(r.Context(), roomID, req.MemberIDs); err != nil {
+	if err := h.service.AddMembers(r.Context(), roomID, req.MemberIDs); err != nil {
+		if err == usecase.ErrInvalidChatMembers {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -212,7 +203,7 @@ func (h *ChatRoomHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 	roomID := vars["roomId"]
 	memberID := vars["memberId"]
 
-	if err := h.repo.RemoveMember(r.Context(), roomID, memberID); err != nil {
+	if err := h.service.RemoveMember(r.Context(), roomID, memberID); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -238,7 +229,7 @@ func (h *ChatRoomHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	messages, err := h.repo.ListMessages(r.Context(), roomID, beforeID, limit)
+	messages, err := h.service.ListMessagesApplication(r.Context(), roomID, beforeID, limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -264,7 +255,7 @@ func (h *ChatRoomHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	content := r.FormValue("content")
 
 	imagePath := ""
-	filename, err := saveUploadedFile(r, "image", filepath.Join(os.Getenv("MEDIA_ROOT"), "images/chat"))
+	filename, imageUpload, err := prepareUploadedFile(r, "image", filepath.Join(os.Getenv("MEDIA_ROOT"), "images/chat"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -274,7 +265,7 @@ func (h *ChatRoomHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filePath := ""
-	filename, err = saveUploadedFile(r, "file", filepath.Join(os.Getenv("MEDIA_ROOT"), "files/chat"))
+	filename, fileUpload, err := prepareUploadedFile(r, "file", filepath.Join(os.Getenv("MEDIA_ROOT"), "files/chat"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -293,7 +284,14 @@ func (h *ChatRoomHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		FilePath:   filePath,
 	}
 
-	if err := h.repo.SendMessage(r.Context(), &msg); err != nil {
+	uploads := make([]usecase.UploadInput, 0, 2)
+	if imageUpload != nil {
+		uploads = append(uploads, *imageUpload)
+	}
+	if fileUpload != nil {
+		uploads = append(uploads, *fileUpload)
+	}
+	if err := h.service.SendMessageApplication(r.Context(), &msg, uploads...); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -310,7 +308,7 @@ func (h *ChatRoomHandler) DeleteMessage(w http.ResponseWriter, r *http.Request) 
 
 	messageID := mux.Vars(r)["messageId"]
 
-	if err := h.repo.DeleteMessage(r.Context(), messageID); err != nil {
+	if err := h.service.DeleteMessage(r.Context(), messageID); err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
@@ -333,12 +331,11 @@ func (h *ChatRoomHandler) MarkAsRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.MessageID == "" {
-		writeError(w, http.StatusBadRequest, "message_id is required")
-		return
-	}
-
-	if err := h.repo.MarkAsRead(r.Context(), req.MessageID, member.ID); err != nil {
+	if err := h.service.MarkAsReadApplication(r.Context(), req.MessageID, member.ID); err != nil {
+		if err == usecase.ErrInvalidMessageID {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -355,7 +352,7 @@ func (h *ChatRoomHandler) GetReadBy(w http.ResponseWriter, r *http.Request) {
 
 	messageID := mux.Vars(r)["messageId"]
 
-	readBy, err := h.repo.GetReadBy(r.Context(), messageID)
+	readBy, err := h.service.GetReadBy(r.Context(), messageID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -373,7 +370,7 @@ func (h *ChatRoomHandler) CountUnread(w http.ResponseWriter, r *http.Request) {
 
 	roomID := mux.Vars(r)["roomId"]
 
-	count, err := h.repo.CountUnread(r.Context(), roomID, member.ID)
+	count, err := h.service.CountUnread(r.Context(), roomID, member.ID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -397,32 +394,16 @@ func (h *ChatRoomHandler) ListAvailableMembers(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if req.Page == 0 {
-		req.Page = 1
-	}
-	if req.Limit == 0 {
-		req.Limit = 20
-	}
-
-	if req.Page < 1 {
-		writeError(w, http.StatusBadRequest, "invalid page parameter")
-		return
-	}
-	if req.Limit < 1 || req.Limit > 100 {
-		writeError(w, http.StatusBadRequest, "invalid limit parameter")
-		return
-	}
-
-	offset := (req.Page - 1) * req.Limit
-
-	members, err := h.repo.ListMembersNotInRoom(r.Context(), roomID, req.Limit, offset)
+	members, total, err := h.service.ListAvailableMembers(r.Context(), roomID, req.Page, req.Limit)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	total, err := h.repo.CountMembersNotInRoom(r.Context(), roomID)
-	if err != nil {
+		switch err {
+		case usecase.ErrInvalidChatPage:
+			writeError(w, http.StatusBadRequest, "invalid page parameter")
+			return
+		case usecase.ErrInvalidChatLimit:
+			writeError(w, http.StatusBadRequest, "invalid limit parameter")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

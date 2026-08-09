@@ -3,20 +3,18 @@ package http
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 
 	"backend/src/usecase"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 )
 
 type InventoryHandler struct {
-	repo usecase.InventoryService
+	service usecase.InventoryService
 }
 
 func NewInventoryHandler(service usecase.InventoryService) *InventoryHandler {
-	return &InventoryHandler{repo: service}
+	return &InventoryHandler{service: service}
 }
 
 func (h *InventoryHandler) CreateInventory(w http.ResponseWriter, r *http.Request) {
@@ -31,18 +29,17 @@ func (h *InventoryHandler) CreateInventory(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if strings.TrimSpace(req.ProductVariantID) == "" || uuid.Validate(req.ProductVariantID) != nil {
-		writeError(w, http.StatusBadRequest, "product_variant_id is required")
-		return
-	}
-
 	inventory := Inventory{
 		ProductVariantID: req.ProductVariantID,
 		ProductPriceID:   req.ProductPriceID,
 		Status:           req.Status,
 	}
 
-	if err := h.repo.CreateInventory(r.Context(), &inventory); err != nil {
+	if err := h.service.CreateInventory(r.Context(), &inventory); err != nil {
+		if err == usecase.ErrInvalidInventoryVariant {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -51,7 +48,7 @@ func (h *InventoryHandler) CreateInventory(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *InventoryHandler) ListInventories(w http.ResponseWriter, r *http.Request) {
-	inventories, err := h.repo.ListInventories(r.Context())
+	inventories, err := h.service.ListInventories(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -63,7 +60,7 @@ func (h *InventoryHandler) ListInventories(w http.ResponseWriter, r *http.Reques
 func (h *InventoryHandler) GetInventory(w http.ResponseWriter, r *http.Request) {
 	inventoryID := mux.Vars(r)["inventoryId"]
 
-	inventory, err := h.repo.GetInventoryByID(r.Context(), inventoryID)
+	inventory, err := h.service.GetInventoryByID(r.Context(), inventoryID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
@@ -81,21 +78,14 @@ func (h *InventoryHandler) UpdateInventory(w http.ResponseWriter, r *http.Reques
 
 	inventoryID := mux.Vars(r)["inventoryId"]
 
-	inventory, err := h.repo.GetInventoryByID(r.Context(), inventoryID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
-		return
-	}
-
 	var req UpdateInventoryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
-	inventory.Status = req.Status
-
-	if err := h.repo.UpdateInventory(r.Context(), inventory); err != nil {
+	inventory, err := h.service.UpdateInventoryApplication(r.Context(), inventoryID, usecase.InventoryUpdateInput{Status: req.Status})
+	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
@@ -112,7 +102,7 @@ func (h *InventoryHandler) DeleteInventory(w http.ResponseWriter, r *http.Reques
 
 	inventoryID := mux.Vars(r)["inventoryId"]
 
-	if err := h.repo.DeleteInventory(r.Context(), inventoryID); err != nil {
+	if err := h.service.DeleteInventoryApplication(r.Context(), inventoryID); err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
@@ -143,7 +133,7 @@ func (h *InventoryHandler) CreateItem(w http.ResponseWriter, r *http.Request) {
 		DateAdded:   req.DateAdded,
 	}
 
-	if err := h.repo.CreateItem(r.Context(), &item); err != nil {
+	if err := h.service.CreateItem(r.Context(), &item); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -154,7 +144,7 @@ func (h *InventoryHandler) CreateItem(w http.ResponseWriter, r *http.Request) {
 func (h *InventoryHandler) ListItems(w http.ResponseWriter, r *http.Request) {
 	inventoryID := mux.Vars(r)["inventoryId"]
 
-	items, err := h.repo.ListItemsByInventoryID(r.Context(), inventoryID)
+	items, err := h.service.ListItemsByInventoryID(r.Context(), inventoryID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -166,7 +156,7 @@ func (h *InventoryHandler) ListItems(w http.ResponseWriter, r *http.Request) {
 func (h *InventoryHandler) GetItem(w http.ResponseWriter, r *http.Request) {
 	itemID := mux.Vars(r)["itemId"]
 
-	item, err := h.repo.GetItemByID(r.Context(), itemID)
+	item, err := h.service.GetItemByID(r.Context(), itemID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
@@ -184,24 +174,14 @@ func (h *InventoryHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 
 	itemID := mux.Vars(r)["itemId"]
 
-	item, err := h.repo.GetItemByID(r.Context(), itemID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
-		return
-	}
-
 	var req UpdateInventoryItemRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
-	item.ItemCode = req.ItemCode
-	item.Status = req.Status
-	item.Cost = req.Cost
-	item.DateAdded = req.DateAdded
-
-	if err := h.repo.UpdateItem(r.Context(), item); err != nil {
+	item, err := h.service.UpdateItemApplication(r.Context(), itemID, usecase.InventoryItemUpdateInput{ItemCode: req.ItemCode, Status: req.Status, Cost: req.Cost, DateAdded: req.DateAdded})
+	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
@@ -218,7 +198,7 @@ func (h *InventoryHandler) DeleteItem(w http.ResponseWriter, r *http.Request) {
 
 	itemID := mux.Vars(r)["itemId"]
 
-	if err := h.repo.DeleteItem(r.Context(), itemID); err != nil {
+	if err := h.service.DeleteItemApplication(r.Context(), itemID); err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}

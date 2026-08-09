@@ -17,6 +17,7 @@ import (
 	domain "backend/src/adapter/http"
 	database "backend/src/adapter/postgres"
 	"backend/src/adapter/session"
+	"backend/src/usecase"
 
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
@@ -30,7 +31,7 @@ func setupCategoryRouter() (*database.MemberRepositoryPGX, *session.SessionCache
 	sessionCache := session.NewSessionCache(time.Hour)
 	repo := database.NewCategoryRepositoryPGX(testPool)
 	handler := composeCategoryHandler(repo)
-	auth := api.AuthMiddleware(sessionCache, memberRepo)
+	auth := api.AuthMiddleware(sessionCache, usecase.NewMemberService(memberRepo, sessionCache))
 
 	r := mux.NewRouter()
 	r.HandleFunc("/api/categories", handler.ListCategories).Methods("GET")

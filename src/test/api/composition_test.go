@@ -18,7 +18,11 @@ func composeInventoryHandler(repo *postgres.InventoryRepositoryPGX) *apphttp.Inv
 }
 
 func composeMemberHandler(member *postgres.MemberRepositoryPGX, sessions *session.SessionCache, codes *postgres.RegistrationCodeRepositoryPGX) *apphttp.MemberHandler {
-	return apphttp.NewMemberHandler(usecase.NewMemberService(member), usecase.NewSessionService(sessions), usecase.NewRegistrationCodeService(codes))
+	return apphttp.NewMemberHandler(
+		usecase.NewMemberService(member, sessions, codes),
+		usecase.NewSessionService(sessions),
+		usecase.NewRegistrationCodeService(codes),
+	)
 }
 
 func composeRegistrationCodeHandler(repo *postgres.RegistrationCodeRepositoryPGX) *apphttp.RegistrationCodeHandler {
