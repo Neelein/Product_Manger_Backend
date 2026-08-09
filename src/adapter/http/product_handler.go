@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 
@@ -20,6 +21,9 @@ func variantErrorStatus(err error) int {
 	if errors.Is(err, ErrProductOptionNotFound) || errors.Is(err, ErrProductVariantNotFound) || errors.Is(err, ErrDetailNotFound) {
 		return http.StatusNotFound
 	}
+	if errors.Is(err, ErrDuplicateSKU) {
+		return http.StatusConflict
+	}
 	if errors.Is(err, ErrDuplicateProductVariant) || errors.Is(err, ErrInvalidProductVariant) {
 		return http.StatusBadRequest
 	}
@@ -27,6 +31,28 @@ func variantErrorStatus(err error) int {
 		return http.StatusBadRequest
 	}
 	return http.StatusInternalServerError
+}
+
+func variantErrorMessage(err error) string {
+	switch {
+	case errors.Is(err, ErrDuplicateSKU):
+		return "此 SKU 已存在，請使用其他 SKU"
+	case errors.Is(err, ErrDuplicateProductVariant):
+		return "此產品變體組合已存在"
+	case errors.Is(err, ErrInvalidProductVariant):
+		return "產品變體資料無效"
+	case errors.Is(err, ErrProductVariantNotFound):
+		return "找不到產品變體"
+	case errors.Is(err, ErrProductOptionNotFound):
+		return "找不到產品規格"
+	case errors.Is(err, ErrDetailNotFound):
+		return "找不到產品詳細資訊"
+	case strings.Contains(err.Error(), "duplicate"), strings.Contains(err.Error(), "does not belong"):
+		return "產品變體資料無效"
+	default:
+		log.Printf("product variant operation failed: %v", err)
+		return "操作失敗，請稍後再試"
+	}
 }
 
 func validVariantInput(req CreateProductVariantRequest) bool {
@@ -59,7 +85,7 @@ func (h *ProductHandler) CreateOption(w http.ResponseWriter, r *http.Request) {
 	}
 	detail, err := h.routeDetail(r)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		writeError(w, http.StatusNotFound, variantErrorMessage(err))
 		return
 	}
 	var req CreateProductOptionRequest
@@ -69,7 +95,7 @@ func (h *ProductHandler) CreateOption(w http.ResponseWriter, r *http.Request) {
 	}
 	o := ProductOption{ProductDetailID: detail.ID, Name: req.Name, Value: req.Value}
 	if err := h.repo.CreateOption(r.Context(), &o); err != nil {
-		writeError(w, variantErrorStatus(err), err.Error())
+		writeError(w, variantErrorStatus(err), variantErrorMessage(err))
 		return
 	}
 	writeJSON(w, http.StatusCreated, ProductOptionResponse{Option: o})
@@ -78,7 +104,7 @@ func (h *ProductHandler) CreateOption(w http.ResponseWriter, r *http.Request) {
 func (h *ProductHandler) ListOptions(w http.ResponseWriter, r *http.Request) {
 	detail, err := h.routeDetail(r)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		writeError(w, http.StatusNotFound, variantErrorMessage(err))
 		return
 	}
 	options, err := h.repo.ListOptionsByDetailID(r.Context(), detail.ID)
@@ -91,12 +117,12 @@ func (h *ProductHandler) ListOptions(w http.ResponseWriter, r *http.Request) {
 func (h *ProductHandler) GetOption(w http.ResponseWriter, r *http.Request) {
 	o, err := h.repo.GetOptionByID(r.Context(), mux.Vars(r)["optionId"])
 	if err != nil {
-		writeError(w, variantErrorStatus(err), err.Error())
+		writeError(w, variantErrorStatus(err), variantErrorMessage(err))
 		return
 	}
 	detail, err := h.routeDetail(r)
 	if err != nil || detail.ID != o.ProductDetailID {
-		writeError(w, http.StatusNotFound, ErrProductOptionNotFound.Error())
+		writeError(w, http.StatusNotFound, variantErrorMessage(ErrProductOptionNotFound))
 		return
 	}
 	writeJSON(w, http.StatusOK, ProductOptionResponse{Option: *o})
@@ -108,12 +134,12 @@ func (h *ProductHandler) UpdateOption(w http.ResponseWriter, r *http.Request) {
 	}
 	o, err := h.repo.GetOptionByID(r.Context(), mux.Vars(r)["optionId"])
 	if err != nil {
-		writeError(w, variantErrorStatus(err), err.Error())
+		writeError(w, variantErrorStatus(err), variantErrorMessage(err))
 		return
 	}
 	detail, err := h.routeDetail(r)
 	if err != nil || detail.ID != o.ProductDetailID {
-		writeError(w, http.StatusNotFound, ErrProductOptionNotFound.Error())
+		writeError(w, http.StatusNotFound, variantErrorMessage(ErrProductOptionNotFound))
 		return
 	}
 	var req UpdateProductOptionRequest
@@ -123,7 +149,7 @@ func (h *ProductHandler) UpdateOption(w http.ResponseWriter, r *http.Request) {
 	}
 	o.Name, o.Value = req.Name, req.Value
 	if err = h.repo.UpdateOption(r.Context(), o); err != nil {
-		writeError(w, variantErrorStatus(err), err.Error())
+		writeError(w, variantErrorStatus(err), variantErrorMessage(err))
 		return
 	}
 	writeJSON(w, http.StatusOK, ProductOptionResponse{Option: *o})
@@ -135,7 +161,7 @@ func (h *ProductHandler) DeleteOption(w http.ResponseWriter, r *http.Request) {
 	}
 	o, err := h.repo.GetOptionByID(r.Context(), mux.Vars(r)["optionId"])
 	if err != nil {
-		writeError(w, variantErrorStatus(err), err.Error())
+		writeError(w, variantErrorStatus(err), variantErrorMessage(err))
 		return
 	}
 	detail, err := h.routeDetail(r)
@@ -144,7 +170,7 @@ func (h *ProductHandler) DeleteOption(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.repo.DeleteOption(r.Context(), o.ID); err != nil {
-		writeError(w, variantErrorStatus(err), err.Error())
+		writeError(w, variantErrorStatus(err), variantErrorMessage(err))
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "product option deleted"})
@@ -157,7 +183,7 @@ func (h *ProductHandler) CreateVariant(w http.ResponseWriter, r *http.Request) {
 	}
 	detail, err := h.routeDetail(r)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		writeError(w, http.StatusNotFound, variantErrorMessage(err))
 		return
 	}
 	var req CreateProductVariantRequest
@@ -166,12 +192,12 @@ func (h *ProductHandler) CreateVariant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !validVariantInput(req) {
-		writeError(w, http.StatusBadRequest, ErrInvalidProductVariant.Error())
+		writeError(w, http.StatusBadRequest, variantErrorMessage(ErrInvalidProductVariant))
 		return
 	}
 	v := ProductVariant{ProductDetailID: detail.ID, ProductPriceID: req.ProductPriceID, SKU: req.SKU, Status: req.Status, OptionIDs: req.OptionIDs}
 	if err = h.repo.CreateVariant(r.Context(), &v); err != nil {
-		writeError(w, variantErrorStatus(err), err.Error())
+		writeError(w, variantErrorStatus(err), variantErrorMessage(err))
 		return
 	}
 	writeJSON(w, http.StatusCreated, ProductVariantResponse{Variant: v})
@@ -179,12 +205,12 @@ func (h *ProductHandler) CreateVariant(w http.ResponseWriter, r *http.Request) {
 func (h *ProductHandler) ListVariants(w http.ResponseWriter, r *http.Request) {
 	detail, err := h.routeDetail(r)
 	if err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
+		writeError(w, http.StatusNotFound, variantErrorMessage(err))
 		return
 	}
 	vs, err := h.repo.ListVariantsByDetailID(r.Context(), detail.ID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, http.StatusInternalServerError, variantErrorMessage(err))
 		return
 	}
 	writeJSON(w, http.StatusOK, ProductVariantListResponse{Variants: vs})
@@ -192,12 +218,12 @@ func (h *ProductHandler) ListVariants(w http.ResponseWriter, r *http.Request) {
 func (h *ProductHandler) GetVariant(w http.ResponseWriter, r *http.Request) {
 	v, err := h.repo.GetVariantByID(r.Context(), mux.Vars(r)["variantId"])
 	if err != nil {
-		writeError(w, variantErrorStatus(err), err.Error())
+		writeError(w, variantErrorStatus(err), variantErrorMessage(err))
 		return
 	}
 	detail, err := h.routeDetail(r)
 	if err != nil || detail.ID != v.ProductDetailID {
-		writeError(w, http.StatusNotFound, ErrProductVariantNotFound.Error())
+		writeError(w, http.StatusNotFound, variantErrorMessage(ErrProductVariantNotFound))
 		return
 	}
 	writeJSON(w, http.StatusOK, ProductVariantResponse{Variant: *v})
@@ -209,12 +235,12 @@ func (h *ProductHandler) UpdateVariant(w http.ResponseWriter, r *http.Request) {
 	}
 	v, err := h.repo.GetVariantByID(r.Context(), mux.Vars(r)["variantId"])
 	if err != nil {
-		writeError(w, variantErrorStatus(err), err.Error())
+		writeError(w, variantErrorStatus(err), variantErrorMessage(err))
 		return
 	}
 	detail, err := h.routeDetail(r)
 	if err != nil || detail.ID != v.ProductDetailID {
-		writeError(w, http.StatusNotFound, ErrProductVariantNotFound.Error())
+		writeError(w, http.StatusNotFound, variantErrorMessage(ErrProductVariantNotFound))
 		return
 	}
 	var req UpdateProductVariantRequest
@@ -223,12 +249,12 @@ func (h *ProductHandler) UpdateVariant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !validVariantInput(CreateProductVariantRequest{ProductPriceID: req.ProductPriceID, OptionIDs: req.OptionIDs}) {
-		writeError(w, http.StatusBadRequest, ErrInvalidProductVariant.Error())
+		writeError(w, http.StatusBadRequest, variantErrorMessage(ErrInvalidProductVariant))
 		return
 	}
 	v.ProductPriceID, v.SKU, v.Status, v.OptionIDs = req.ProductPriceID, req.SKU, req.Status, req.OptionIDs
 	if err = h.repo.UpdateVariant(r.Context(), v); err != nil {
-		writeError(w, variantErrorStatus(err), err.Error())
+		writeError(w, variantErrorStatus(err), variantErrorMessage(err))
 		return
 	}
 	writeJSON(w, http.StatusOK, ProductVariantResponse{Variant: *v})
@@ -240,16 +266,16 @@ func (h *ProductHandler) DeleteVariant(w http.ResponseWriter, r *http.Request) {
 	}
 	v, err := h.repo.GetVariantByID(r.Context(), mux.Vars(r)["variantId"])
 	if err != nil {
-		writeError(w, variantErrorStatus(err), err.Error())
+		writeError(w, variantErrorStatus(err), variantErrorMessage(err))
 		return
 	}
 	detail, err := h.routeDetail(r)
 	if err != nil || detail.ID != v.ProductDetailID {
-		writeError(w, http.StatusNotFound, ErrProductVariantNotFound.Error())
+		writeError(w, http.StatusNotFound, variantErrorMessage(ErrProductVariantNotFound))
 		return
 	}
 	if err := h.repo.DeleteVariant(r.Context(), v.ID); err != nil {
-		writeError(w, variantErrorStatus(err), err.Error())
+		writeError(w, variantErrorStatus(err), variantErrorMessage(err))
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "product variant deleted"})

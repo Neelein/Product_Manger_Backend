@@ -8,6 +8,7 @@ import (
 	domain "backend/src/domain/model"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -350,6 +351,10 @@ func (r *ProductRepositoryPGX) CreateVariant(ctx context.Context, variant *domai
 	err := r.pool.QueryRow(ctx, "SELECT * FROM create_product_variant($1, $2, $3, $4, $5)", variant.ProductDetailID, variant.ProductPriceID, variant.SKU, variant.Status, variant.OptionIDs).
 		Scan(&variant.ID, &variant.ProductDetailID, &variant.ProductPriceID, &variant.SKU, &variant.Status, &variant.CreatedAt, &variant.UpdatedAt)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "R0023" {
+			return domain.ErrDuplicateSKU
+		}
 		return fmt.Errorf("creating product variant: %w", err)
 	}
 	return r.loadVariantOptions(ctx, variant)
@@ -401,6 +406,10 @@ func (r *ProductRepositoryPGX) UpdateVariant(ctx context.Context, variant *domai
 		return domain.ErrProductVariantNotFound
 	}
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "R0023" {
+			return domain.ErrDuplicateSKU
+		}
 		return fmt.Errorf("updating product variant: %w", err)
 	}
 	return r.loadVariantOptions(ctx, variant)

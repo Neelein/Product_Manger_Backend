@@ -26,6 +26,7 @@ var (
 	ErrProductOptionNotFound   = errors.New("product option not found")
 	ErrProductVariantNotFound  = errors.New("product variant not found")
 	ErrDuplicateProductVariant = errors.New("duplicate product variant")
+	ErrDuplicateSKU            = errors.New("duplicate sku")
 	ErrInvalidProductVariant   = errors.New("invalid product variant")
 	ErrNotEventOwner           = errors.New("not the event owner")
 )

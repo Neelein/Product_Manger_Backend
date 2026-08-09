@@ -80,3 +80,27 @@ func TestProductVariantRepositoryPGX_InventoryByVariant(t *testing.T) {
 	assert.Equal(t, variant.ID, got.ProductVariantID)
 	assert.Equal(t, price.ID, got.ProductPriceID)
 }
+
+func TestProductVariantRepositoryPGX_MapsDuplicateSKU(t *testing.T) {
+	defer cleanupProducts(t)
+	repo := database.NewProductRepositoryPGX(testPool)
+	product := createTestProduct(t, repo)
+	detail := domain.ProductDetail{ProductID: product.ID}
+	require.NoError(t, repo.CreateDetail(context.Background(), &detail))
+	price := domain.ProductPrice{ProductDetailID: detail.ID, Label: "standard", Amount: 10}
+	require.NoError(t, repo.CreatePrice(context.Background(), &price))
+	firstOption := domain.ProductOption{ProductDetailID: detail.ID, Name: "size", Value: "S"}
+	require.NoError(t, repo.CreateOption(context.Background(), &firstOption))
+	sku := "SKU-DUPLICATE"
+	first := domain.ProductVariant{ProductDetailID: detail.ID, ProductPriceID: price.ID, SKU: &sku, OptionIDs: []string{firstOption.ID}}
+	require.NoError(t, repo.CreateVariant(context.Background(), &first))
+	option := domain.ProductOption{ProductDetailID: detail.ID, Name: "size", Value: "M"}
+	require.NoError(t, repo.CreateOption(context.Background(), &option))
+
+	second := domain.ProductVariant{ProductDetailID: detail.ID, ProductPriceID: price.ID, SKU: first.SKU, OptionIDs: []string{option.ID}}
+	err := repo.CreateVariant(context.Background(), &second)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, domain.ErrDuplicateSKU)
+	assert.NotContains(t, err.Error(), "R0023")
+	assert.NotContains(t, err.Error(), "SQLSTATE")
+}
