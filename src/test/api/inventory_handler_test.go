@@ -11,22 +11,23 @@ import (
 	"testing"
 	"time"
 
-	"backend/src/api"
-	"backend/src/database"
-	"backend/src/domain"
+	api "backend/src/adapter/http"
+	domain "backend/src/adapter/http"
+	database "backend/src/adapter/postgres"
+	"backend/src/adapter/session"
 
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func setupInventoryTest(t *testing.T) (*database.InventoryRepositoryPGX, *database.ProductRepositoryPGX, *database.MemberRepositoryPGX, *database.SessionCache, *api.InventoryHandler) {
+func setupInventoryTest(t *testing.T) (*database.InventoryRepositoryPGX, *database.ProductRepositoryPGX, *database.MemberRepositoryPGX, *session.SessionCache, *api.InventoryHandler) {
 	t.Helper()
 	invRepo := database.NewInventoryRepositoryPGX(testPool)
 	productRepo := database.NewProductRepositoryPGX(testPool)
 	memberRepo := database.NewMemberRepositoryPGX(testPool)
-	sessionCache := database.NewSessionCache(time.Hour)
-	handler := api.NewInventoryHandler(invRepo)
+	sessionCache := session.NewSessionCache(time.Hour)
+	handler := composeInventoryHandler(invRepo)
 	return invRepo, productRepo, memberRepo, sessionCache, handler
 }
 
@@ -75,6 +76,9 @@ func TestInventoryHandler_CreateInventory(t *testing.T) {
 	_, productRepo, memberRepo, sessionCache, handler := setupInventoryTest(t)
 	member := createAuthMember(t, memberRepo, sessionCache)
 	price := createTestPriceForHandler(t, productRepo)
+	variants, err := productRepo.ListVariantsByDetailID(context.Background(), price.ProductDetailID)
+	require.NoError(t, err)
+	require.NotEmpty(t, variants)
 
 	tests := []struct {
 		name       string
@@ -84,8 +88,9 @@ func TestInventoryHandler_CreateInventory(t *testing.T) {
 		{
 			name: "valid inventory",
 			body: domain.CreateInventoryRequest{
-				ProductPriceID: price.ID,
-				Status:         "銷售中",
+				ProductPriceID:   price.ID,
+				ProductVariantID: variants[0].ID,
+				Status:           "銷售中",
 			},
 			wantStatus: http.StatusCreated,
 		},

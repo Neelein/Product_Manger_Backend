@@ -11,20 +11,21 @@ import (
 	"testing"
 	"time"
 
-	"backend/src/api"
-	"backend/src/database"
-	"backend/src/domain"
+	api "backend/src/adapter/http"
+	domain "backend/src/adapter/http"
+	database "backend/src/adapter/postgres"
+	"backend/src/adapter/session"
 
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func setupRegistrationCodeTest() (*database.MemberRepositoryPGX, *database.SessionCache, *mux.Router) {
+func setupRegistrationCodeTest() (*database.MemberRepositoryPGX, *session.SessionCache, *mux.Router) {
 	memberRepo := database.NewMemberRepositoryPGX(testPool)
-	sessionCache := database.NewSessionCache(time.Hour)
+	sessionCache := session.NewSessionCache(time.Hour)
 	codeRepo := database.NewRegistrationCodeRepositoryPGX(testPool)
-	handler := api.NewRegistrationCodeHandler(codeRepo)
+	handler := composeRegistrationCodeHandler(codeRepo)
 
 	auth := api.AuthMiddleware(sessionCache, memberRepo)
 	adminAuth := api.RequireRole("admin", auth)
@@ -39,7 +40,7 @@ func setupRegistrationCodeTest() (*database.MemberRepositoryPGX, *database.Sessi
 
 // authCookie creates a member with the given role in the same session cache the
 // router uses, and returns their session cookie.
-func authCookie(t *testing.T, memberRepo *database.MemberRepositoryPGX, sessionCache *database.SessionCache, role string) *http.Cookie {
+func authCookie(t *testing.T, memberRepo *database.MemberRepositoryPGX, sessionCache *session.SessionCache, role string) *http.Cookie {
 	t.Helper()
 	member := createAuthMember(t, memberRepo, sessionCache)
 	if role == "admin" {

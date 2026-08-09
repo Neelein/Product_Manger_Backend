@@ -11,8 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"backend/src/api"
-	"backend/src/database"
+	apphttp "backend/src/adapter/http"
+	"backend/src/adapter/postgres"
+	"backend/src/adapter/session"
+	"backend/src/infrastructure"
+	"backend/src/usecase"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
@@ -51,7 +54,7 @@ func main() {
 
 	secret := os.Getenv("API_GATEWAY_SECRET")
 
-	pool, err := database.NewPool(context.Background(), databaseURL)
+	pool, err := infrastructure.NewPool(context.Background(), databaseURL)
 	if err != nil {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
@@ -61,12 +64,21 @@ func main() {
 	if err := runMigrations(databaseURL); err != nil {
 		log.Fatalf("migration failed: %v", err)
 	}
-	repo := database.NewProductRepositoryPGX(pool)
-	inventoryRepo := database.NewInventoryRepositoryPGX(pool)
-	memberRepo := database.NewMemberRepositoryPGX(pool)
-	codeRepo := database.NewRegistrationCodeRepositoryPGX(pool)
-	categoryRepo := database.NewCategoryRepositoryPGX(pool)
-	sessionRepo := database.NewSessionCache(time.Hour)
+	repo := postgres.NewProductRepository(pool)
+	inventoryRepo := postgres.NewInventoryRepository(pool)
+	memberRepo := postgres.NewMemberRepository(pool)
+	codeRepo := postgres.NewRegistrationCodeRepository(pool)
+	categoryRepo := postgres.NewCategoryRepository(pool)
+	sessionRepo := session.NewCache(time.Hour)
+	productService := usecase.NewProductService(repo)
+	inventoryService := usecase.NewInventoryService(inventoryRepo)
+	memberService := usecase.NewMemberService(memberRepo)
+	sessionService := usecase.NewSessionService(sessionRepo)
+	codeService := usecase.NewRegistrationCodeService(codeRepo)
+	categoryService := usecase.NewCategoryService(categoryRepo)
+	announcementService := usecase.NewAnnouncementService(postgres.NewAnnouncementRepository(pool))
+	chatService := usecase.NewChatService(postgres.NewChatRoomRepository(pool))
+	eventService := usecase.NewEventService(postgres.NewEventRepository(pool))
 	defer sessionRepo.Stop()
 
 	r := mux.NewRouter()
@@ -74,16 +86,16 @@ func main() {
 	r.HandleFunc("/", homeHandler).Methods("GET")
 	r.HandleFunc("/api/health", healthHandler).Methods("GET")
 
-	api.RegisterProductRoutes(r, repo, memberRepo, sessionRepo)
-	api.RegisterInventoryRoutes(r, inventoryRepo, memberRepo, sessionRepo)
-	api.RegisterMemberRoutes(r, memberRepo, sessionRepo, codeRepo)
-	api.RegisterRegistrationCodeRoutes(r, codeRepo, memberRepo, sessionRepo)
-	api.RegisterCategoryRoutes(r, categoryRepo, memberRepo, sessionRepo)
-	api.RegisterAnnouncementRoutes(r, database.NewAnnouncementRepositoryPGX(pool), memberRepo, sessionRepo)
-	api.RegisterChatRoutes(r, database.NewChatRoomRepositoryPGX(pool), memberRepo, sessionRepo)
-	api.RegisterEventRoutes(r, database.NewEventRepositoryPGX(pool), memberRepo, sessionRepo)
+	apphttp.RegisterProductRoutes(r, productService, memberService, sessionService)
+	apphttp.RegisterInventoryRoutes(r, inventoryService, memberService, sessionService)
+	apphttp.RegisterMemberRoutes(r, memberService, sessionService, codeService)
+	apphttp.RegisterRegistrationCodeRoutes(r, codeService, memberService, sessionService)
+	apphttp.RegisterCategoryRoutes(r, categoryService, memberService, sessionService)
+	apphttp.RegisterAnnouncementRoutes(r, announcementService, memberService, sessionService)
+	apphttp.RegisterChatRoutes(r, chatService, memberService, sessionService)
+	apphttp.RegisterEventRoutes(r, eventService, memberService, sessionService)
 
-	handler := api.GatewayMiddleware(secret)(r)
+	handler := apphttp.GatewayMiddleware(secret)(r)
 	if secret == "" {
 		log.Println("API_GATEWAY_SECRET is not set — /api routes are open")
 	}

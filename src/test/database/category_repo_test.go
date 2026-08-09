@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"backend/src/database"
-	"backend/src/domain"
+	database "backend/src/adapter/postgres"
+	domain "backend/src/domain/model"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
