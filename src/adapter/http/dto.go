@@ -250,5 +250,6 @@ var (
 	ErrProductOptionNotFound   = model.ErrProductOptionNotFound
 	ErrProductVariantNotFound  = model.ErrProductVariantNotFound
 	ErrDuplicateProductVariant = model.ErrDuplicateProductVariant
+	ErrDuplicateSKU            = model.ErrDuplicateSKU
 	ErrInvalidProductVariant   = model.ErrInvalidProductVariant
 )

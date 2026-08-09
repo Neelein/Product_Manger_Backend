@@ -93,3 +93,31 @@ func TestVariantHandlers_RejectCrossProductMutations(t *testing.T) {
 	w = variantRequest(t, http.MethodPost, "/api/products/"+product.ID+"/detail/options/"+option.ID+"/delete", map[string]string{"productId": product.ID, "optionId": option.ID}, nil, member, handler.DeleteOption)
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
+
+func TestVariantHandlers_DuplicateSKUReturnsSafeConflict(t *testing.T) {
+	defer cleanupProducts(t)
+	repo := database.NewProductRepositoryPGX(testPool)
+	product, detail, price, _, first := createVariantFixture(t, repo)
+	sku := "SKU-DUPLICATE"
+	first.SKU = &sku
+	require.NoError(t, repo.UpdateVariant(context.Background(), &first))
+
+	option := domain.ProductOption{ProductDetailID: detail.ID, Name: "size", Value: "M"}
+	require.NoError(t, repo.CreateOption(context.Background(), &option))
+	memberRepo := database.NewMemberRepositoryPGX(testPool)
+	sessionCache := session.NewSessionCache(time.Hour)
+	member := createAuthMember(t, memberRepo, sessionCache)
+	handler := composeProductHandler(repo)
+
+	w := variantRequest(t, http.MethodPost, "/api/products/"+product.ID+"/detail/variants", map[string]string{"productId": product.ID}, domain.CreateProductVariantRequest{
+		ProductPriceID: price.ID,
+		SKU:            first.SKU,
+		OptionIDs:      []string{option.ID},
+	}, member, handler.CreateVariant)
+	assert.Equal(t, http.StatusConflict, w.Code)
+	var response map[string]string
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&response))
+	assert.Equal(t, "此 SKU 已存在，請使用其他 SKU", response["error"])
+	assert.NotContains(t, w.Body.String(), "SQLSTATE")
+	assert.NotContains(t, w.Body.String(), "duplicate sku")
+}
