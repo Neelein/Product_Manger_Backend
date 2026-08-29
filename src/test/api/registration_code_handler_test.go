@@ -45,7 +45,7 @@ func authCookie(t *testing.T, memberRepo *database.MemberRepositoryPGX, sessionC
 	t.Helper()
 	member := createAuthMember(t, memberRepo, sessionCache)
 	if role == "admin" {
-		_, err := testPool.Exec(context.Background(), "UPDATE members SET role = 'admin' WHERE id = $1", member.ID)
+		_, err := testPool.Exec(context.Background(), "UPDATE members SET member_type = 'employee', permission = 'admin' WHERE id = $1", member.ID)
 		require.NoError(t, err)
 	}
 	session := domain.Session{MemberID: member.ID}

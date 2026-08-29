@@ -7,6 +7,7 @@ import (
 
 	"backend/src/domain/model"
 	"backend/src/usecase"
+	"github.com/gorilla/mux"
 )
 
 func memberFromRequest(r *http.Request) *Member {
@@ -62,11 +63,35 @@ func (h *MemberHandler) RegisterMember(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, MemberResponse{
-		ID:    member.ID,
-		Email: member.Email,
-		Name:  member.Name,
-		Role:  member.Role,
+		ID: member.ID, Email: member.Email, Name: member.Name,
+		MemberType: member.MemberType, Permission: member.Permission,
 	})
+}
+
+func (h *MemberHandler) UpdateMemberPermission(w http.ResponseWriter, r *http.Request) {
+	actor := memberFromRequest(r)
+	if actor == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var req UpdateMemberPermissionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if err := h.memberService.UpdatePermission(r.Context(), actor.ID, mux.Vars(r)["memberId"], req.Permission); err != nil {
+		if errors.Is(err, model.ErrForbidden) {
+			writeError(w, http.StatusForbidden, "forbidden")
+			return
+		}
+		if errors.Is(err, ErrMemberNotFound) {
+			writeError(w, http.StatusNotFound, "member not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"permission": req.Permission})
 }
 
 func (h *MemberHandler) LoginMember(w http.ResponseWriter, r *http.Request) {
@@ -90,10 +115,10 @@ func (h *MemberHandler) LoginMember(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, LoginResponse{
 		Member: MemberResponse{
-			ID:    member.ID,
-			Email: member.Email,
-			Name:  member.Name,
-			Role:  member.Role,
+			ID:         member.ID,
+			Email:      member.Email,
+			Name:       member.Name,
+			MemberType: member.MemberType, Permission: member.Permission,
 		},
 	})
 }
@@ -146,10 +171,10 @@ func (h *MemberHandler) UpdateMember(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, MemberResponse{
-		ID:    member.ID,
-		Email: member.Email,
-		Name:  member.Name,
-		Role:  member.Role,
+		ID:         member.ID,
+		Email:      member.Email,
+		Name:       member.Name,
+		MemberType: member.MemberType, Permission: member.Permission,
 	})
 }
 
@@ -161,9 +186,9 @@ func (h *MemberHandler) GetCurrentMember(w http.ResponseWriter, r *http.Request)
 	}
 
 	writeJSON(w, http.StatusOK, MemberResponse{
-		ID:    member.ID,
-		Email: member.Email,
-		Name:  member.Name,
-		Role:  member.Role,
+		ID:         member.ID,
+		Email:      member.Email,
+		Name:       member.Name,
+		MemberType: member.MemberType, Permission: member.Permission,
 	})
 }

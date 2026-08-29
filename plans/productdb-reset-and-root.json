@@ -1,0 +1,12 @@
+{
+  "title": "Reset original productdb and seed root administrator",
+  "scope": "Only localhost:5432/productdb public schema; do not create or start databases, containers, or volumes and do not access other databases or schemas.",
+  "plan": [
+    "Record and verify the target connection identity and current public table list.",
+    "Drop every table in public, including existing application tables and schema_migrations, without using DROP DATABASE.",
+    "Run the existing backend migration mechanism from migration 001 through the final migration (expected 020), then verify schema_migrations has the final version and dirty=false.",
+    "Inspect the resulting members schema and existing password-hashing and authorization conventions before creating username=root and email=root@gmail.com with a bcrypt password hash, member_type=employee, and permission=admin.",
+    "Run repeatable migration/reset and root-seed verification coverage without recording any real password, then run gofmt, go test ./..., and explicit database verification queries."
+  ],
+  "safety": "All database commands must explicitly use host localhost, port 5432, and database productdb; stop on any uncertainty or migration incompatibility."
+}

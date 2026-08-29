@@ -63,7 +63,24 @@ func RequireRole(role string, auth func(http.Handler) http.Handler) func(http.Ha
 				writeError(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
-			if member.Role != role {
+			if member.MemberType != "employee" || member.Permission != role {
+				writeError(w, http.StatusForbidden, "forbidden")
+				return
+			}
+			handler.ServeHTTP(w, r)
+		}))
+	}
+}
+
+func RequireEmployee(auth func(http.Handler) http.Handler) func(http.Handler) http.Handler {
+	return func(handler http.Handler) http.Handler {
+		return auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			member := MemberFromContext(r.Context())
+			if member == nil {
+				writeError(w, http.StatusUnauthorized, "unauthorized")
+				return
+			}
+			if member.MemberType != "employee" {
 				writeError(w, http.StatusForbidden, "forbidden")
 				return
 			}

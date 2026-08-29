@@ -12,6 +12,7 @@ type CategoryRepository = CategoryRepositoryPGX
 type AnnouncementRepository = AnnouncementRepositoryPGX
 type ChatRoomRepository = ChatRoomRepositoryPGX
 type EventRepository = EventRepositoryPGX
+type OrderRepository = OrderRepositoryPGX
 
 func NewProductRepository(pool *pgxpool.Pool) *ProductRepository {
 	return NewProductRepositoryPGX(pool)
@@ -37,3 +38,4 @@ func NewChatRoomRepository(pool *pgxpool.Pool) *ChatRoomRepository {
 func NewEventRepository(pool *pgxpool.Pool) *EventRepository {
 	return NewEventRepositoryPGX(pool)
 }
+func NewOrderRepository(pool *pgxpool.Pool) *OrderRepository { return NewOrderRepositoryPGX(pool) }

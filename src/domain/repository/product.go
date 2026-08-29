@@ -8,6 +8,7 @@ import (
 type Product interface {
 	Create(context.Context, *model.Product) error
 	List(context.Context) ([]model.Product, error)
+	Search(context.Context, string, string) ([]model.Product, error)
 	GetByID(context.Context, string) (*model.Product, error)
 	Update(context.Context, *model.Product) error
 	Delete(context.Context, string) error
@@ -28,6 +29,8 @@ type Product interface {
 	ListVariantsByDetailID(context.Context, string) ([]model.ProductVariant, error)
 	UpdateVariant(context.Context, *model.ProductVariant) error
 	DeleteVariant(context.Context, string) error
+	CreateImage(context.Context, *model.ProductImage) error
+	ListImages(context.Context, string) ([]model.ProductImage, error)
 }
 
 type ProductVariants interface {

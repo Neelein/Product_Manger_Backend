@@ -1,0 +1,9 @@
+{
+  "title": "Order product image snapshot",
+  "plan": [
+    "Derive the first persisted product image in the PostgreSQL order-item snapshot query using the existing media URL convention.",
+    "Keep product_snapshot compatible and expose image_url as a nullable field.",
+    "Cover handler serialization and order create/get integration behavior."
+  ],
+  "contract": "order.items[].product_snapshot.image_url is a stable string URL when the product has a persisted image; otherwise null."
+}

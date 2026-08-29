@@ -1,0 +1,7 @@
+{
+  "date": "2026-08-29",
+  "decision": "After confirming that migration 009 seeds system@internal and migration 014 seeds shakya1221@gmail.com, and confirming neither member has foreign-key data references, remove only those two seed members from localhost:5432/productdb public.members in one transaction. Preserve root@gmail.com and do not modify production code or configuration.",
+  "rationale": "The requested post-reset state contains exactly one member: the manually created root administrator; migration seed members are not required.",
+  "verification": "The deletion committed two rows and preserved root@gmail.com. Password verification was attempted once using the user-provided credential without recording sensitive values and did not pass; follow-up read-only validation is blocked until the credential/hash mismatch is resolved.",
+  "sensitive_data": "No plaintext password, password hash, token, or credential-derived value is stored."
+}

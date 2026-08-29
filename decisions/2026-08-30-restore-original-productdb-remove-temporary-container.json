@@ -1,0 +1,7 @@
+{
+  "date": "2026-08-30",
+  "decision": "Switch the backend back to the existing localhost:5432/productdb connection and remove only the verified temporary pm_postgres container publishing host port 55432. Preserve all volumes and leave my_postgres_db untouched.",
+  "rationale": "The requested operational state is the original database service on port 5432, with the temporary database container removed but its named volume retained.",
+  "configuration": "dotenv.env already contains DATABASE_URL for localhost:5432/productdb, so no configuration change is planned.",
+  "sensitive_data": "Do not record or emit the requested login password, password hashes, cookies, or tokens."
+}

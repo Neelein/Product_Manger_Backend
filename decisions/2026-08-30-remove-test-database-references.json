@@ -1,0 +1,7 @@
+{
+  "date": "2026-08-30",
+  "decision": "Remove the legacy test database name and direct references from backend test configuration, while preserving the real productdb database and all production connection settings.",
+  "rationale": "Integration tests must never silently fall back to a production database. CI and local dotenv configuration now identify a dedicated test database, TEST_DATABASE_URL is mandatory, and the production-only reset verification is not run by the generic CI integration job.",
+  "validation": "The shared test-database configuration rejects an unset URL, a missing database name, and a URL targeting the production database. The orphaned seed utility was confirmed unreferenced before removal.",
+  "sensitive_data": "No production database operation, container operation, migration change, or credential change is part of this decision."
+}

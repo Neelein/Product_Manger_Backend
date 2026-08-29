@@ -13,6 +13,14 @@ type Product struct {
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
 }
+
+type ProductImage struct {
+	ID        string    `json:"id"`
+	ProductID string    `json:"product_id"`
+	URL       string    `json:"url"`
+	Filename  string    `json:"filename"`
+	CreatedAt time.Time `json:"created_at"`
+}
 type ProductDetail struct {
 	ID                string    `json:"id"`
 	ProductID         string    `json:"product_id"`
