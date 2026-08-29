@@ -15,7 +15,7 @@ CREATE TABLE registration_codes (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     code        VARCHAR(64) NOT NULL UNIQUE,
     created_by  UUID REFERENCES members(id) ON DELETE SET NULL,
-    used_by     UUID REFERENCES members(id) ON DELETE SET NULL,
+    used_by     UUID REFERENCES members(id) ON DELETE RESTRICT,
     used_at     TIMESTAMPTZ,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -118,7 +118,7 @@ LANGUAGE plpgsql AS $$
 DECLARE
     v_deleted BOOLEAN := FALSE;
 BEGIN
-    DELETE FROM registration_codes WHERE id = p_id
+    DELETE FROM registration_codes WHERE id = p_id AND used_at IS NULL
     RETURNING TRUE INTO v_deleted;
     IF v_deleted IS NULL THEN
         v_deleted := FALSE;

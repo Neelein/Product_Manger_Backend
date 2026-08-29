@@ -1,0 +1,12 @@
+{
+  "title": "Remove legacy test database references",
+  "scope": "Remove only the legacy test database name and direct references from backend test configuration; preserve the real productdb database, migrations, and production connection settings.",
+  "plan": [
+    "Use a dedicated CI test database name in dotenv.env and the integration workflow, while leaving the production-only reset verification outside the generic CI integration job.",
+    "Require TEST_DATABASE_URL explicitly in integration test mains, require a database name, and reject the production productdb database with a clear configuration error.",
+    "Remove the orphaned test seed utility after confirming it has no references.",
+    "Add focused configuration tests covering missing TEST_DATABASE_URL and production-database protection.",
+    "Run gofmt, focused tests, go test ./..., go vet, and the shared documentation generator/tests."
+  ],
+  "safety": "Do not connect to, modify, delete, or create localhost:5432/productdb; do not create containers; do not modify migrations or unrelated files."
+}

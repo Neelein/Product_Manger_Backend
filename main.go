@@ -71,16 +71,22 @@ func main() {
 	codeRepo := postgres.NewRegistrationCodeRepository(pool)
 	categoryRepo := postgres.NewCategoryRepository(pool)
 	sessionRepo := session.NewCache(time.Hour)
-	productService := usecase.NewProductService(repo)
+	fileStorage := storage.LocalFileStorage{}
+	productService := usecase.NewProductService(repo, fileStorage)
 	inventoryService := usecase.NewInventoryService(inventoryRepo)
 	memberService := usecase.NewMemberService(memberRepo, sessionRepo, codeRepo)
 	sessionService := usecase.NewSessionService(sessionRepo)
 	codeService := usecase.NewRegistrationCodeService(codeRepo)
 	categoryService := usecase.NewCategoryService(categoryRepo)
-	fileStorage := storage.LocalFileStorage{}
 	announcementService := usecase.NewAnnouncementService(postgres.NewAnnouncementRepository(pool), fileStorage)
 	chatService := usecase.NewChatService(postgres.NewChatRoomRepository(pool), fileStorage)
 	eventService := usecase.NewEventService(postgres.NewEventRepository(pool))
+	orderService := usecase.NewOrderService(postgres.NewOrderRepository(pool))
+	paymentService := usecase.NewPaymentService(postgres.NewPaymentRepository(pool))
+	paymentWorker := usecase.NewPaymentWorker(paymentService, time.Now)
+	workerContext, stopWorker := context.WithCancel(context.Background())
+	defer stopWorker()
+	go paymentWorker.Start(workerContext)
 	defer sessionRepo.Stop()
 
 	r := mux.NewRouter()
@@ -96,6 +102,8 @@ func main() {
 	apphttp.RegisterAnnouncementRoutes(r, announcementService, memberService, sessionService)
 	apphttp.RegisterChatRoutes(r, chatService, memberService, sessionService)
 	apphttp.RegisterEventRoutes(r, eventService, memberService, sessionService)
+	apphttp.RegisterOrderRoutes(r, orderService, memberService, sessionService)
+	apphttp.RegisterPaymentRoutes(r, paymentService, memberService, sessionService)
 
 	handler := apphttp.GatewayMiddleware(secret)(r)
 	if secret == "" {

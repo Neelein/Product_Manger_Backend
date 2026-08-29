@@ -4,7 +4,9 @@ import (
 	"backend/src/domain/model"
 	"backend/src/domain/repository"
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/mail"
 	"path/filepath"
 	"strings"
 	"time"
@@ -26,6 +28,7 @@ type ProductService interface {
 	GetVariantForDetail(context.Context, string, string) (*model.ProductVariant, error)
 	Create(context.Context, *model.Product) error
 	List(context.Context) ([]model.Product, error)
+	Search(context.Context, string, string) ([]model.Product, error)
 	GetByID(context.Context, string) (*model.Product, error)
 	Update(context.Context, *model.Product) error
 	Delete(context.Context, string) error
@@ -46,6 +49,8 @@ type ProductService interface {
 	ListVariantsByDetailID(context.Context, string) ([]model.ProductVariant, error)
 	UpdateVariant(context.Context, *model.ProductVariant) error
 	DeleteVariant(context.Context, string) error
+	UploadImages(context.Context, string, []UploadInput) ([]model.ProductImage, error)
+	ListImages(context.Context, string) ([]model.ProductImage, error)
 }
 
 type InventoryService interface {
@@ -74,6 +79,7 @@ type MemberService interface {
 	GetByEmail(context.Context, string) (*model.Member, error)
 	GetByID(context.Context, string) (*model.Member, error)
 	Update(context.Context, *model.Member) error
+	UpdatePermission(context.Context, string, string, string) error
 }
 
 type SessionService interface {
@@ -156,9 +162,69 @@ type EventService interface {
 	ListViewers(context.Context, string) ([]model.EventViewer, error)
 }
 
-type productService struct{ repository.Product }
+type OrderCreateItem struct {
+	ProductPriceID string
+	Quantity       int
+}
 
-func NewProductService(repo repository.Product) ProductService { return &productService{repo} }
+type OrderCustomerInput struct {
+	Name  string `json:"name"`
+	Phone string `json:"phone"`
+	Email string `json:"email"`
+}
+
+type OrderCreateInput struct {
+	Items           []OrderCreateItem
+	Customer        OrderCustomerInput
+	DeliveryMethod  string
+	ShippingAddress string
+}
+
+type OrderService interface {
+	Create(context.Context, *model.Member, OrderCreateInput) (*model.Order, error)
+	GetByID(context.Context, *model.Member, string) (*model.Order, error)
+	List(context.Context, *model.Member, string, int, int) ([]model.Order, int, error)
+	Cancel(context.Context, *model.Member, string) error
+	UpdateStatus(context.Context, *model.Member, string, string) (*model.Order, error)
+	History(context.Context, *model.Member, string) ([]model.OrderStatusHistory, error)
+}
+
+type productService struct {
+	repository.Product
+	storage FileStorage
+}
+
+func NewProductService(repo repository.Product, stores ...FileStorage) ProductService {
+	var store FileStorage
+	if len(stores) > 0 {
+		store = stores[0]
+	}
+	return &productService{Product: repo, storage: store}
+}
+func (s *productService) UploadImages(ctx context.Context, productID string, uploads []UploadInput) ([]model.ProductImage, error) {
+	if s.storage == nil {
+		return nil, fmt.Errorf("file storage is not configured")
+	}
+	existing, err := s.Product.ListImages(ctx, productID)
+	if err != nil {
+		return nil, err
+	}
+	if len(existing)+len(uploads) > 3 {
+		return nil, fmt.Errorf("product image limit exceeded")
+	}
+	images := make([]model.ProductImage, 0, len(uploads))
+	for _, upload := range uploads {
+		if err := s.storage.Save(filepath.Join(upload.Directory, upload.Filename), upload.Content); err != nil {
+			return nil, err
+		}
+		image := model.ProductImage{ProductID: productID, Filename: upload.Filename}
+		if err := s.Product.CreateImage(ctx, &image); err != nil {
+			return nil, err
+		}
+		images = append(images, image)
+	}
+	return images, nil
+}
 func (s *productService) GetDetailForRoute(ctx context.Context, productID, detailID string) (*model.ProductDetail, error) {
 	detail, err := s.Product.GetDetailByProductID(ctx, productID)
 	if err != nil || (detailID != "" && detail.ID != detailID) {
@@ -226,18 +292,36 @@ func NewMemberService(repo repository.Member, dependencies ...interface{}) Membe
 	return service
 }
 func (s *memberService) RegisterApplication(ctx context.Context, member *model.Member, password, code string) error {
-	if code == "" {
-		return model.ErrInvalidRegistrationCode
-	}
-	if s.codes == nil {
-		return fmt.Errorf("registration service is not configured")
-	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
 	member.Password = string(hash)
+	member.Permission = ""
+	if code == "" {
+		member.MemberType = "customer"
+		return s.Member.Create(ctx, member)
+	}
+	if s.codes == nil {
+		return fmt.Errorf("registration service is not configured")
+	}
 	return s.codes.RegisterMemberWithCode(ctx, member, code)
+}
+
+func (s *memberService) UpdatePermission(ctx context.Context, actorID, targetID, permission string) error {
+	actor, err := s.Member.GetByID(ctx, actorID)
+	if err != nil || actor == nil || actor.MemberType != "employee" || actor.Permission != "admin" || actorID == targetID {
+		return model.ErrForbidden
+	}
+	target, err := s.Member.GetByID(ctx, targetID)
+	if err != nil || target == nil || target.MemberType != "employee" {
+		return model.ErrMemberNotFound
+	}
+	repo, ok := s.Member.(repository.MemberPermission)
+	if !ok {
+		return fmt.Errorf("member permission repository is not configured")
+	}
+	return repo.UpdatePermission(ctx, targetID, permission)
 }
 func (s *memberService) Authenticate(ctx context.Context, email, password string) (*model.Member, *model.Session, error) {
 	member, err := s.Member.GetByEmail(ctx, email)
@@ -460,6 +544,89 @@ func (s *chatService) StoreUpload(input UploadInput) error {
 }
 
 type eventService struct{ repository.EventOperations }
+
+type orderService struct{ repository.Order }
+
+func NewOrderService(repo repository.Order) OrderService { return &orderService{Order: repo} }
+
+func (s *orderService) Create(ctx context.Context, member *model.Member, input OrderCreateInput) (*model.Order, error) {
+	if member == nil || (member.MemberType != "customer" && member.MemberType != "employee") || len(input.Items) == 0 {
+		return nil, model.ErrInvalidOrder
+	}
+	customer := OrderCustomerInput{Name: strings.TrimSpace(input.Customer.Name), Phone: strings.TrimSpace(input.Customer.Phone), Email: strings.TrimSpace(input.Customer.Email)}
+	if customer.Name == "" || customer.Phone == "" || customer.Email == "" {
+		return nil, model.ErrInvalidOrder
+	}
+	parsedEmail, err := mail.ParseAddress(customer.Email)
+	if err != nil || parsedEmail.Address != customer.Email {
+		return nil, model.ErrInvalidOrder
+	}
+	if input.DeliveryMethod != "email" && input.DeliveryMethod != "home_address" {
+		return nil, model.ErrInvalidOrder
+	}
+	address := strings.TrimSpace(input.ShippingAddress)
+	if input.DeliveryMethod == "home_address" && address == "" {
+		return nil, model.ErrInvalidOrder
+	}
+	items := make([]model.OrderItem, len(input.Items))
+	for i, item := range input.Items {
+		if item.ProductPriceID == "" || item.Quantity <= 0 {
+			return nil, model.ErrInvalidOrder
+		}
+		items[i].ProductPriceID, items[i].Quantity = item.ProductPriceID, item.Quantity
+	}
+	customerSnapshot, _ := json.Marshal(customer)
+	shippingSnapshot := map[string]string{"delivery_method": input.DeliveryMethod}
+	if address != "" {
+		shippingSnapshot["address"] = address
+	}
+	shipping, _ := json.Marshal(shippingSnapshot)
+	order := &model.Order{CustomerID: member.ID, CustomerSnapshot: customerSnapshot, ShippingAddressSnapshot: shipping}
+	if err := s.Order.Create(ctx, order, items); err != nil {
+		return nil, err
+	}
+	return order, nil
+}
+
+func (s *orderService) GetByID(ctx context.Context, member *model.Member, id string) (*model.Order, error) {
+	if member == nil {
+		return nil, model.ErrForbidden
+	}
+	return s.Order.GetByID(ctx, id, member.ID, member.MemberType == "employee")
+}
+func (s *orderService) List(ctx context.Context, member *model.Member, status string, page, size int) ([]model.Order, int, error) {
+	if member == nil {
+		return nil, 0, model.ErrForbidden
+	}
+	if page < 1 {
+		page = 1
+	}
+	if size < 1 {
+		size = 20
+	}
+	if size > 100 {
+		size = 100
+	}
+	return s.Order.List(ctx, member.ID, status, page, size, member.MemberType == "employee")
+}
+func (s *orderService) Cancel(ctx context.Context, member *model.Member, id string) error {
+	if member == nil {
+		return model.ErrForbidden
+	}
+	return s.Order.Cancel(ctx, id, member.ID, member.MemberType == "employee")
+}
+func (s *orderService) UpdateStatus(ctx context.Context, member *model.Member, id, status string) (*model.Order, error) {
+	if member == nil || member.MemberType != "employee" {
+		return nil, model.ErrForbidden
+	}
+	return s.Order.UpdateStatus(ctx, id, member.ID, status)
+}
+func (s *orderService) History(ctx context.Context, member *model.Member, id string) ([]model.OrderStatusHistory, error) {
+	if member == nil {
+		return nil, model.ErrForbidden
+	}
+	return s.Order.History(ctx, id, member.ID, member.MemberType == "employee")
+}
 
 func NewEventService(repo repository.EventOperations) EventService { return &eventService{repo} }
 

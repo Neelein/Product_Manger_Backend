@@ -54,6 +54,31 @@ make test
 make test-integration
 ```
 
+### Storefront browser E2E fixture
+
+The repeatable fixture command reads `DATABASE_URL` and defaults to the dedicated
+database `productdb_storefront_e2e`. Apply migrations 001 through 020 first, and
+create that database if it does not exist. The command only upserts the fixed
+category, product, detail, and two prices; it does not truncate other data. It
+also verifies the resulting rows before exiting successfully.
+
+```bash
+DATABASE_URL=postgres://root:root123@localhost:5432/productdb_storefront_e2e?sslmode=disable \
+  go run ./src/test/seed_storefront
+```
+
+The storefront E2E harness should invoke the command from `backend/` exactly as
+above, then start the API against the same `DATABASE_URL`.
+
+### Checkout order contract
+
+`POST /api/orders` accepts `items`, `customer` (`name`, `phone`, `email`), and
+`delivery_method` (`email` or `home_address`). `shipping_address.address` is
+required only for `home_address`. The order response retains the existing
+`customer_snapshot` and `shipping_address_snapshot` fields, now containing JSON
+objects shaped as `{name, phone, email}` and `{delivery_method, address?}`.
+Payment remains a separate optional API flow; order creation does not require it.
+
 ## Architecture
 
 ### Domain Layers
@@ -121,11 +146,14 @@ members 1──N sessions
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/api/products` | — | List products |
+| GET | `/api/products` | — | List products; optional `keyword` (case-insensitive name match) and `category_id` (exact UUID match) query parameters |
 | POST | `/api/products` | Yes | Create product |
 | GET | `/api/products/{productId}` | — | Get product |
 | POST | `/api/products/{productId}/update` | — | Update product |
 | POST | `/api/products/{productId}/delete` | — | Delete product |
+| GET | `/api/products/{productId}/images` | — | List product images as `{ "images": [...] }` |
+| POST | `/api/products/{productId}/images` | Employee | Multipart upload with repeated `images` fields; JPEG/PNG/WebP, 10 MB per file, maximum three persisted images total |
+| GET | `/media/images/products/{productId}/{filename}` | — | Public product image retrieval |
 | GET | `/api/products/{productId}/detail` | — | Get product detail |
 | POST | `/api/products/{productId}/detail/update` | Yes | Update detail |
 | POST | `/api/products/{productId}/details` | Yes | Create detail |

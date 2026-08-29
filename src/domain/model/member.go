@@ -3,13 +3,14 @@ package model
 import "time"
 
 type Member struct {
-	ID        string    `json:"id"`
-	Email     string    `json:"email"`
-	Password  string    `json:"-"`
-	Name      string    `json:"name"`
-	Role      string    `json:"role"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID         string    `json:"id"`
+	Email      string    `json:"email"`
+	Password   string    `json:"-"`
+	Name       string    `json:"name"`
+	MemberType string    `json:"member_type"`
+	Permission string    `json:"permission"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 type Session struct {
 	ID         string    `json:"id"`

@@ -35,9 +35,9 @@ func setupMemberHandler() (*database.MemberRepositoryPGX, *session.SessionCache,
 func cleanupMembers(t *testing.T) {
 	t.Helper()
 	_, _ = testPool.Exec(context.Background(), "TRUNCATE TABLE read_receipts, chat_messages, chat_room_members, chat_rooms CASCADE")
+	_, _ = testPool.Exec(context.Background(), "TRUNCATE TABLE registration_codes CASCADE")
 	_, err := testPool.Exec(context.Background(), "DELETE FROM members WHERE id != '00000000-0000-0000-0000-000000000000'")
 	require.NoError(t, err)
-	_, _ = testPool.Exec(context.Background(), "TRUNCATE TABLE registration_codes CASCADE")
 }
 
 // seedCode creates a fresh unused registration code and returns its raw value.
@@ -82,7 +82,6 @@ func TestHandler_Register(t *testing.T) {
 	assert.NotEmpty(t, resp.ID)
 	assert.Equal(t, "user@example.com", resp.Email)
 	assert.Equal(t, "John Doe", resp.Name)
-	assert.Equal(t, "member", resp.Role)
 }
 
 func TestHandler_Register_MissingCode(t *testing.T) {
@@ -90,7 +89,10 @@ func TestHandler_Register_MissingCode(t *testing.T) {
 	_, _, handler := setupMemberHandler()
 
 	w := executeRegister(handler, "nocode@example.com", "password", "No Code", "")
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, http.StatusCreated, w.Code)
+	var resp domain.MemberResponse
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+	assert.Equal(t, "customer", resp.MemberType)
 }
 
 func TestHandler_Register_InvalidCode(t *testing.T) {
@@ -144,7 +146,6 @@ func TestHandler_Login(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "login@example.com", resp.Member.Email)
 	assert.Equal(t, "Login User", resp.Member.Name)
-	assert.Equal(t, "member", resp.Member.Role)
 
 	cookies := w.Result().Cookies()
 	var sessionCookie *http.Cookie
@@ -201,7 +202,6 @@ func TestHandler_Me(t *testing.T) {
 		ID:    loginResp.Member.ID,
 		Email: loginResp.Member.Email,
 		Name:  loginResp.Member.Name,
-		Role:  "member",
 	}))
 	w = httptest.NewRecorder()
 	handler.GetCurrentMember(w, req)
@@ -213,7 +213,6 @@ func TestHandler_Me(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "me@example.com", resp.Email)
 	assert.Equal(t, "Me User", resp.Name)
-	assert.Equal(t, "member", resp.Role)
 }
 
 func TestHandler_Me_NoCookie(t *testing.T) {
@@ -271,7 +270,6 @@ func TestHandler_UpdateMember(t *testing.T) {
 		ID:    loginResp.Member.ID,
 		Email: loginResp.Member.Email,
 		Name:  loginResp.Member.Name,
-		Role:  loginResp.Member.Role,
 	})
 
 	t.Run("successful update", func(t *testing.T) {

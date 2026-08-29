@@ -142,7 +142,7 @@ func (h *EventHandler) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updated, err := h.service.UpdateApplication(r.Context(), eventID, member.ID, member.Role == "admin", usecase.EventUpdateInput{
+	updated, err := h.service.UpdateApplication(r.Context(), eventID, member.ID, member.MemberType == "employee" && member.Permission == "admin", usecase.EventUpdateInput{
 		Title: req.Title, Description: req.Description, StartTime: req.StartTime, EndTime: req.EndTime, Status: req.Status,
 	})
 	if err != nil {
@@ -162,7 +162,7 @@ func (h *EventHandler) DeleteEvent(w http.ResponseWriter, r *http.Request) {
 
 	eventID := mux.Vars(r)["eventId"]
 
-	if err := h.service.DeleteApplication(r.Context(), eventID, member.ID, member.Role == "admin"); err != nil {
+	if err := h.service.DeleteApplication(r.Context(), eventID, member.ID, member.MemberType == "employee" && member.Permission == "admin"); err != nil {
 		eventError(w, err, http.StatusInternalServerError)
 		return
 	}
@@ -185,7 +185,7 @@ func (h *EventHandler) AddViewer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.AddViewerApplication(r.Context(), eventID, member.ID, req.MemberID, member.Role == "admin"); err != nil {
+	if err := h.service.AddViewerApplication(r.Context(), eventID, member.ID, req.MemberID, member.MemberType == "employee" && member.Permission == "admin"); err != nil {
 		if err == model.ErrInvalidProductVariant {
 			writeError(w, http.StatusBadRequest, "member_id is required")
 			return
@@ -208,7 +208,7 @@ func (h *EventHandler) RemoveViewer(w http.ResponseWriter, r *http.Request) {
 	eventID := vars["eventId"]
 	memberID := vars["memberId"]
 
-	if err := h.service.RemoveViewerApplication(r.Context(), eventID, member.ID, memberID, member.Role == "admin"); err != nil {
+	if err := h.service.RemoveViewerApplication(r.Context(), eventID, member.ID, memberID, member.MemberType == "employee" && member.Permission == "admin"); err != nil {
 		eventError(w, err, http.StatusInternalServerError)
 		return
 	}
@@ -225,7 +225,7 @@ func (h *EventHandler) ListViewers(w http.ResponseWriter, r *http.Request) {
 
 	eventID := mux.Vars(r)["eventId"]
 
-	viewers, err := h.service.ListViewersApplication(r.Context(), eventID, member.ID, member.Role == "admin")
+	viewers, err := h.service.ListViewersApplication(r.Context(), eventID, member.ID, member.MemberType == "employee" && member.Permission == "admin")
 	if err != nil {
 		eventError(w, err, http.StatusInternalServerError)
 		return

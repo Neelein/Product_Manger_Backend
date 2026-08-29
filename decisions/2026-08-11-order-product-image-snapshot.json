@@ -1,0 +1,6 @@
+{
+  "date": "2026-08-11",
+  "decision": "Use the first persisted product image, ordered by creation time and image ID, and derive /media/images/products/{product_id}/{filename} rather than accepting checkout input.",
+  "field": "image_url",
+  "compatibility": "Products without images serialize image_url as JSON null."
+}

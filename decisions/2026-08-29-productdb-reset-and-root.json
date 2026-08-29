@@ -1,0 +1,6 @@
+{
+  "date": "2026-08-29",
+  "decision": "Perform the explicitly authorized destructive reset against only the original localhost:5432/productdb public schema, remove all public tables and migration metadata, replay the repository migrations, and seed the required root administrator using the application's bcrypt and employee/admin authorization contract.",
+  "rationale": "Resetting the existing public schema is required to remove the current data while preserving the original database instance; DROP DATABASE, new infrastructure, other schemas, and other databases are out of scope.",
+  "sensitive_data": "No plaintext password is stored in files, tests, commands, or reports."
+}

@@ -3,6 +3,7 @@ package repository
 import (
 	"backend/src/domain/model"
 	"context"
+	"time"
 )
 
 type Member interface {
@@ -10,6 +11,10 @@ type Member interface {
 	GetByEmail(context.Context, string) (*model.Member, error)
 	GetByID(context.Context, string) (*model.Member, error)
 	Update(context.Context, *model.Member) error
+}
+
+type MemberPermission interface {
+	UpdatePermission(context.Context, string, string) error
 }
 type Session interface {
 	Create(context.Context, *model.Session) error
@@ -47,6 +52,20 @@ type Inventory interface {
 	ListItemsByInventoryID(context.Context, string) ([]model.InventoryItem, error)
 	UpdateItem(context.Context, *model.InventoryItem) error
 	DeleteItem(context.Context, string) error
+}
+
+type Order interface {
+	Create(context.Context, *model.Order, []model.OrderItem) error
+	GetByID(context.Context, string, string, bool) (*model.Order, error)
+	List(context.Context, string, string, int, int, bool) ([]model.Order, int, error)
+	Cancel(context.Context, string, string, bool) error
+	UpdateStatus(context.Context, string, string, string) (*model.Order, error)
+	History(context.Context, string, string, bool) ([]model.OrderStatusHistory, error)
+}
+
+type Payment interface {
+	Pay(context.Context, string, string, string, string, string, time.Time) (*model.Payment, error)
+	ExpirePending(context.Context, time.Time, time.Time) (int, error)
 }
 
 type Announcement interface {

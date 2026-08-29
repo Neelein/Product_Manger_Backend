@@ -1,14 +1,19 @@
 package http
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"backend/src/usecase"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 )
 
@@ -269,13 +274,87 @@ func (h *ProductHandler) ListProducts(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
-	products, err := h.service.List(r.Context())
+	products, err := h.service.Search(r.Context(), r.URL.Query().Get("keyword"), r.URL.Query().Get("category_id"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	writeJSON(w, http.StatusOK, ProductListResponse{Products: products})
+}
+
+func (h *ProductHandler) UploadImages(w http.ResponseWriter, r *http.Request) {
+	if MemberFromContext(r.Context()) == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 30<<20+1<<20)
+	if err := r.ParseMultipartForm(30 << 20); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid form data")
+		return
+	}
+	files := r.MultipartForm.File["images"]
+	if len(files) == 0 {
+		writeError(w, http.StatusBadRequest, "at least one image is required")
+		return
+	}
+	if len(files) > 3 {
+		writeError(w, http.StatusBadRequest, "a maximum of 3 images may be uploaded per request")
+		return
+	}
+	productID := mux.Vars(r)["productId"]
+	uploads := make([]usecase.UploadInput, 0, len(files))
+	dir := filepath.Join(os.Getenv("MEDIA_ROOT"), "images/products", productID)
+	for _, header := range files {
+		if header.Size > 10<<20 {
+			writeError(w, http.StatusBadRequest, "each image must be 10 MB or smaller")
+			return
+		}
+		file, err := header.Open()
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid image")
+			return
+		}
+		data, err := io.ReadAll(io.LimitReader(file, 10<<20+1))
+		file.Close()
+		if err != nil || len(data) > 10<<20 {
+			writeError(w, http.StatusBadRequest, "invalid image")
+			return
+		}
+		contentType := http.DetectContentType(data)
+		ext := map[string]string{"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}[contentType]
+		if ext == "" {
+			writeError(w, http.StatusBadRequest, "only JPEG, PNG, and WebP images are supported")
+			return
+		}
+		name := uuid.NewString() + ext
+		uploads = append(uploads, usecase.UploadInput{Directory: dir, Filename: name, Content: bytes.NewReader(data)})
+	}
+	images, err := h.service.UploadImages(r.Context(), productID, uploads)
+	if err != nil {
+		if strings.Contains(err.Error(), "maximum") || strings.Contains(err.Error(), "limit exceeded") {
+			writeError(w, http.StatusBadRequest, "a product may have at most 3 images")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "could not save images")
+		return
+	}
+	for i := range images {
+		images[i].URL = "/media/images/products/" + productID + "/" + images[i].Filename
+	}
+	writeJSON(w, http.StatusCreated, ProductImageListResponse{Images: images})
+}
+
+func (h *ProductHandler) ListImages(w http.ResponseWriter, r *http.Request) {
+	images, err := h.service.ListImages(r.Context(), mux.Vars(r)["productId"])
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	for i := range images {
+		images[i].URL = "/media/images/products/" + images[i].ProductID + "/" + images[i].Filename
+	}
+	writeJSON(w, http.StatusOK, ProductImageListResponse{Images: images})
 }
 
 func (h *ProductHandler) GetProduct(

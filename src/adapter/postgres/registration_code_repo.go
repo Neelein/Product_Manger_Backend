@@ -22,9 +22,13 @@ func NewRegistrationCodeRepositoryPGX(pool *pgxpool.Pool) *RegistrationCodeRepos
 }
 
 func (r *RegistrationCodeRepositoryPGX) RegisterMemberWithCode(ctx context.Context, member *domain.Member, code string) error {
+	var permission *string
 	err := r.pool.QueryRow(ctx, "SELECT * FROM register_member_with_code($1, $2, $3, $4)",
 		member.Email, member.Password, member.Name, code,
-	).Scan(&member.ID, &member.Role, &member.CreatedAt, &member.UpdatedAt)
+	).Scan(&member.ID, &member.MemberType, &permission, &member.CreatedAt, &member.UpdatedAt)
+	if permission != nil {
+		member.Permission = *permission
+	}
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {

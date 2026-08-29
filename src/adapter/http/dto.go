@@ -1,14 +1,17 @@
 package http
 
 import (
-	"backend/src/domain/model"
+	"encoding/json"
 	"time"
+
+	"backend/src/domain/model"
 )
 
 type Member = model.Member
 type Session = model.Session
 type RegistrationCode = model.RegistrationCode
 type Product = model.Product
+type ProductImage = model.ProductImage
 type ProductDetail = model.ProductDetail
 type ProductPrice = model.ProductPrice
 type ProductOption = model.ProductOption
@@ -23,6 +26,10 @@ type ChatRoom = model.ChatRoom
 type ChatRoomWithMeta = model.ChatRoomWithMeta
 type ChatMessage = model.ChatMessage
 type ReadReceipt = model.ReadReceipt
+type Order = model.Order
+type OrderItem = model.OrderItem
+type OrderStatusHistory = model.OrderStatusHistory
+type Payment = model.Payment
 
 type ErrorResponse struct {
 	Error string `json:"error"`
@@ -44,11 +51,15 @@ type UpdateMemberRequest struct {
 	Email string `json:"email"`
 	Name  string `json:"name"`
 }
+type UpdateMemberPermissionRequest struct {
+	Permission string `json:"permission"`
+}
 type MemberResponse struct {
-	ID    string `json:"id"`
-	Email string `json:"email"`
-	Name  string `json:"name"`
-	Role  string `json:"role"`
+	ID         string `json:"id"`
+	Email      string `json:"email"`
+	Name       string `json:"name"`
+	MemberType string `json:"member_type"`
+	Permission string `json:"permission"`
 }
 type CreateRegistrationCodeRequest struct {
 	Code string `json:"code"`
@@ -75,6 +86,9 @@ type ProductResponse struct {
 }
 type ProductListResponse struct {
 	Products []Product `json:"products"`
+}
+type ProductImageListResponse struct {
+	Images []ProductImage `json:"images"`
 }
 type CreateDetailRequest struct {
 	Introduction      string `json:"introduction"`
@@ -223,6 +237,75 @@ type RoomMembersRequest struct {
 	RoomID string `json:"room_id"`
 	Page   int    `json:"page"`
 	Limit  int    `json:"limit"`
+}
+type CreateOrderItemRequest struct {
+	ProductPriceID string `json:"product_price_id"`
+	Quantity       int    `json:"quantity"`
+	UnitPrice      any    `json:"unit_price,omitempty"`
+	LineTotal      any    `json:"line_total,omitempty"`
+}
+type CreateOrderRequest struct {
+	Items           []CreateOrderItemRequest           `json:"items"`
+	Customer        CreateOrderCustomerRequest         `json:"customer"`
+	DeliveryMethod  string                             `json:"delivery_method"`
+	ShippingAddress *CreateOrderShippingAddressRequest `json:"shipping_address,omitempty"`
+}
+type CreateOrderCustomerRequest struct {
+	Name  string `json:"name"`
+	Phone string `json:"phone"`
+	Email string `json:"email"`
+}
+type CreateOrderShippingAddressRequest struct {
+	Address string `json:"address"`
+}
+type UpdateOrderStatusRequest struct {
+	Status string `json:"status"`
+}
+type OrderResponse struct {
+	Order OrderResponseDTO `json:"order"`
+}
+type OrderListResponse struct {
+	Orders   []OrderResponseDTO `json:"orders"`
+	Total    int                `json:"total"`
+	Page     int                `json:"page"`
+	PageSize int                `json:"page_size"`
+}
+type OrderResponseDTO struct {
+	ID                      string                 `json:"id"`
+	OrderNo                 string                 `json:"order_no"`
+	CustomerID              string                 `json:"customer_id"`
+	Status                  string                 `json:"status"`
+	PaymentStatus           string                 `json:"payment_status"`
+	FulfillmentStatus       string                 `json:"fulfillment_status"`
+	Subtotal                string                 `json:"subtotal"`
+	TotalAmount             string                 `json:"total_amount"`
+	CustomerSnapshot        json.RawMessage        `json:"customer_snapshot"`
+	ShippingAddressSnapshot json.RawMessage        `json:"shipping_address_snapshot"`
+	CreatedAt               time.Time              `json:"created_at"`
+	UpdatedAt               time.Time              `json:"updated_at"`
+	Items                   []OrderItemResponseDTO `json:"items"`
+}
+type OrderItemResponseDTO struct {
+	ID              string          `json:"id"`
+	OrderID         string          `json:"order_id"`
+	ProductPriceID  string          `json:"product_price_id"`
+	Quantity        int             `json:"quantity"`
+	UnitPrice       string          `json:"unit_price"`
+	LineTotal       string          `json:"line_total"`
+	ProductSnapshot json.RawMessage `json:"product_snapshot"`
+	CreatedAt       time.Time       `json:"created_at"`
+}
+type OrderHistoryResponse struct {
+	History []OrderStatusHistory `json:"history"`
+}
+type CreatePaymentRequest struct {
+	Method     string `json:"method"`
+	CardNumber string `json:"card_number"`
+	CVV        string `json:"cvv"`
+	OTP        string `json:"otp"`
+}
+type PaymentResponse struct {
+	Payment Payment `json:"payment"`
 }
 
 var (

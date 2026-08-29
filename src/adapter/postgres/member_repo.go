@@ -24,6 +24,7 @@ func (r *MemberRepositoryPGX) Create(ctx context.Context, member *domain.Member)
 	err := r.pool.QueryRow(ctx, "SELECT * FROM create_member($1, $2, $3)",
 		member.Email, member.Password, member.Name,
 	).Scan(&member.ID, &member.CreatedAt, &member.UpdatedAt)
+	member.MemberType = "customer"
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -36,7 +37,11 @@ func (r *MemberRepositoryPGX) Create(ctx context.Context, member *domain.Member)
 
 func (r *MemberRepositoryPGX) GetByEmail(ctx context.Context, email string) (*domain.Member, error) {
 	var m domain.Member
-	err := r.pool.QueryRow(ctx, "SELECT * FROM get_member_by_email($1)", email).Scan(&m.ID, &m.Email, &m.Password, &m.Name, &m.Role, &m.CreatedAt, &m.UpdatedAt)
+	var permission *string
+	err := r.pool.QueryRow(ctx, "SELECT * FROM get_member_by_email($1)", email).Scan(&m.ID, &m.Email, &m.Password, &m.Name, &m.MemberType, &permission, &m.CreatedAt, &m.UpdatedAt)
+	if permission != nil {
+		m.Permission = *permission
+	}
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -48,7 +53,11 @@ func (r *MemberRepositoryPGX) GetByEmail(ctx context.Context, email string) (*do
 
 func (r *MemberRepositoryPGX) GetByID(ctx context.Context, id string) (*domain.Member, error) {
 	var m domain.Member
-	err := r.pool.QueryRow(ctx, "SELECT * FROM get_member_by_id($1)", id).Scan(&m.ID, &m.Email, &m.Password, &m.Name, &m.Role, &m.CreatedAt, &m.UpdatedAt)
+	var permission *string
+	err := r.pool.QueryRow(ctx, "SELECT * FROM get_member_by_id($1)", id).Scan(&m.ID, &m.Email, &m.Password, &m.Name, &m.MemberType, &permission, &m.CreatedAt, &m.UpdatedAt)
+	if permission != nil {
+		m.Permission = *permission
+	}
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -71,6 +80,18 @@ func (r *MemberRepositoryPGX) Update(ctx context.Context, member *domain.Member)
 			return domain.ErrEmailAlreadyExists
 		}
 		return fmt.Errorf("updating member: %w", err)
+	}
+	return nil
+}
+
+func (r *MemberRepositoryPGX) UpdatePermission(ctx context.Context, id, permission string) error {
+	var updatedAt interface{}
+	err := r.pool.QueryRow(ctx, "SELECT * FROM update_member_permission($1, $2)", id, permission).Scan(&updatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.ErrMemberNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("updating member permission: %w", err)
 	}
 	return nil
 }

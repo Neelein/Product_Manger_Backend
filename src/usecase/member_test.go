@@ -14,6 +14,10 @@ func (f *fakeMembers) GetByEmail(context.Context, string) (*model.Member, error)
 }
 func (f *fakeMembers) GetByID(context.Context, string) (*model.Member, error) { return f.member, nil }
 func (f *fakeMembers) Update(context.Context, *model.Member) error            { return nil }
+func (f *fakeMembers) UpdatePermission(_ context.Context, _ string, permission string) error {
+	f.member.Permission = permission
+	return nil
+}
 
 type fakeSessions struct{ session *model.Session }
 
@@ -32,5 +36,23 @@ func TestMemberUseCaseLoginAndRegister(t *testing.T) {
 	}
 	if _, _, err := u.Login(context.Background(), member.Email, "secret"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestMemberServiceUpdatePermissionRequiresAdminEmployee(t *testing.T) {
+	repo := &fakeMembers{member: &model.Member{ID: "admin", MemberType: "employee", Permission: "admin"}}
+	service := NewMemberService(repo)
+	if err := service.UpdatePermission(context.Background(), "admin", "employee", "catalog_manager"); err != nil {
+		t.Fatal(err)
+	}
+	if repo.member.Permission != "catalog_manager" {
+		t.Fatalf("permission was not persisted")
+	}
+	if err := service.UpdatePermission(context.Background(), "admin", "admin", "employee"); err != model.ErrForbidden {
+		t.Fatalf("expected self-permission change to be forbidden, got %v", err)
+	}
+	repo.member.MemberType = "customer"
+	if err := service.UpdatePermission(context.Background(), "admin", "employee", "admin"); err != model.ErrForbidden {
+		t.Fatalf("expected customer actor to be forbidden, got %v", err)
 	}
 }

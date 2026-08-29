@@ -1,0 +1,13 @@
+{
+  "title": "Restore original productdb and remove temporary PostgreSQL container",
+  "scope": "Use the existing localhost:5432/productdb database and remove only the container proven to publish host port 55432.",
+  "plan": [
+    "Read-only inspect both PostgreSQL containers, including identity, image, database environment, and storage mounts; never stop or recreate my_postgres_db.",
+    "Stop the backend currently using the temporary service, remove only pm_postgres by container identity, and preserve its named volume.",
+    "Confirm dotenv.env already targets localhost:5432/productdb; make no configuration change unless required.",
+    "Start the backend on the existing :8090 port with DATABASE_URL targeting localhost:5432/productdb and verify process environment and database connectivity.",
+    "Verify GET / and GET /api/health return 200 and perform the authorized root login without exposing credentials, hashes, cookies, or tokens.",
+    "Run go test ./... and the shared documentation generator/tests; report any unavailable credential or test dependency as a blocker."
+  ],
+  "safety": "Do not stop, delete, recreate, or modify my_postgres_db; do not delete any volume, image, database, or data."
+}

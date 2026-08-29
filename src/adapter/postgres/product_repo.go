@@ -81,6 +81,28 @@ func (r *ProductRepositoryPGX) List(
 	return products, nil
 }
 
+func (r *ProductRepositoryPGX) Search(ctx context.Context, keyword, categoryID string) ([]domain.Product, error) {
+	rows, err := r.pool.Query(ctx, `SELECT p.id, p.name, p.status, COALESCE(p.category_id::text, ''), COALESCE(c.name, ''), p.created_at, p.updated_at
+		FROM products p LEFT JOIN categories c ON c.id = p.category_id
+		WHERE ($1 = '' OR p.name ILIKE '%' || $1 || '%') AND (NULLIF($2, '') IS NULL OR p.category_id = NULLIF($2, '')::uuid)
+		ORDER BY p.created_at DESC`, keyword, categoryID)
+	if err != nil {
+		return nil, fmt.Errorf("searching products: %w", err)
+	}
+	products, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.Product, error) {
+		var p domain.Product
+		err := row.Scan(&p.ID, &p.Name, &p.Status, &p.CategoryID, &p.Category, &p.CreatedAt, &p.UpdatedAt)
+		return p, err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("searching products: %w", err)
+	}
+	if products == nil {
+		products = []domain.Product{}
+	}
+	return products, nil
+}
+
 func (r *ProductRepositoryPGX) GetByID(
 	ctx context.Context,
 	id string,
@@ -425,4 +447,31 @@ func (r *ProductRepositoryPGX) DeleteVariant(ctx context.Context, id string) err
 		return domain.ErrProductVariantNotFound
 	}
 	return nil
+}
+
+func (r *ProductRepositoryPGX) CreateImage(ctx context.Context, image *domain.ProductImage) error {
+	err := r.pool.QueryRow(ctx, "SELECT * FROM create_product_image($1, $2)", image.ProductID, image.Filename).Scan(&image.ID, &image.CreatedAt)
+	if err != nil {
+		return fmt.Errorf("creating product image: %w", err)
+	}
+	return nil
+}
+
+func (r *ProductRepositoryPGX) ListImages(ctx context.Context, productID string) ([]domain.ProductImage, error) {
+	rows, err := r.pool.Query(ctx, "SELECT * FROM list_product_images($1)", productID)
+	if err != nil {
+		return nil, fmt.Errorf("listing product images: %w", err)
+	}
+	images, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.ProductImage, error) {
+		var image domain.ProductImage
+		err := row.Scan(&image.ID, &image.ProductID, &image.Filename, &image.CreatedAt)
+		return image, err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("listing product images: %w", err)
+	}
+	if images == nil {
+		images = []domain.ProductImage{}
+	}
+	return images, nil
 }
