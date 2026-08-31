@@ -1,0 +1,7 @@
+{
+  "date": "2026-08-31",
+  "decision": "Remove ProductPrice.InventoryID and inventory_id from price SQL function/API responses while retaining nullable ProductPrice.ProductVariantID. Inventory remains associated through product_variants.product_price_id -> inventories.product_variant_id and is returned by inventory APIs, not by price objects.",
+  "rationale": "A price does not directly own inventory; exposing a representative inventory ID on ProductPrice duplicated the variant-based relationship and made the price contract misleading.",
+  "validation": "Updated model JSON coverage, PostgreSQL function return columns, repository scans, integration expectations, and backend documentation; verified that Inventory and InventoryItem InventoryID fields remain unchanged.",
+  "frontend_impact": "No frontend files changed. Frontend consumers must stop reading product price inventory_id, if any, and obtain inventory through the product_variant_id inventory contract."
+}

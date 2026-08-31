@@ -1,0 +1,7 @@
+{
+  "date": "2026-08-31",
+  "decision": "Remove the unused destructive database setup helpers from handler_test.go and product_repo_test.go, along with imports used only by those helpers.",
+  "rationale": "Integration tests now initialize and reset through the safeintegration schema harness; retaining unreachable table drops, function drops, database creation, or migration runners creates unnecessary destructive SQL risk.",
+  "validation": "A static architecture regression test asserts both integration test files use safeintegration and do not define the removed helpers; existing safeintegration schema cleanup remains unchanged.",
+  "sensitive_data": "No production code, migration, database data, or runtime connection setting was changed, and no destructive SQL was executed."
+}

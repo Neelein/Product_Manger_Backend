@@ -29,9 +29,9 @@ func (r *ProductRepositoryPGX) Create(
 		status = "active"
 	}
 
-	memberID := product.CreatedBy
-	if memberID == "" {
-		memberID = "00000000-0000-0000-0000-000000000000"
+	var memberID *string
+	if product.CreatedBy != "" {
+		memberID = &product.CreatedBy
 	}
 
 	var categoryID *string
@@ -219,7 +219,7 @@ func (r *ProductRepositoryPGX) GetPriceByID(
 	var p domain.ProductPrice
 
 	err := r.pool.QueryRow(ctx, "SELECT * FROM get_product_price_by_id($1)", id).Scan(&p.ID, &p.ProductDetailID, &p.Label, &p.Amount, &p.Currency,
-		&p.SortOrder, &p.InventoryID, &p.CreatedAt, &p.UpdatedAt)
+		&p.SortOrder, &p.ProductVariantID, &p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrPriceNotFound
@@ -242,7 +242,7 @@ func (r *ProductRepositoryPGX) GetPricesByDetailID(
 	prices, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.ProductPrice, error) {
 		var p domain.ProductPrice
 		err := row.Scan(&p.ID, &p.ProductDetailID, &p.Label, &p.Amount,
-			&p.Currency, &p.SortOrder, &p.InventoryID, &p.CreatedAt, &p.UpdatedAt)
+			&p.Currency, &p.SortOrder, &p.ProductVariantID, &p.CreatedAt, &p.UpdatedAt)
 		return p, err
 	})
 	if err != nil {

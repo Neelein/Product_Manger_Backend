@@ -61,7 +61,7 @@ func TestOrderDatabaseIntegrity(t *testing.T) {
 	require.NoError(t, testPool.QueryRow(ctx, `INSERT INTO product_prices (product_detail_id, label, amount) VALUES ($1, 'default', 10) RETURNING id`, detailID).Scan(&priceID))
 	var variantID string
 	require.NoError(t, testPool.QueryRow(ctx, `SELECT id FROM create_product_variant($1, $2, NULL, 'active', NULL)`, detailID, priceID).Scan(&variantID))
-	require.NoError(t, testPool.QueryRow(ctx, `INSERT INTO inventories (product_variant_id, product_price_id) VALUES ($1, $2) RETURNING id`, variantID, priceID).Scan(&inventoryID))
+	require.NoError(t, testPool.QueryRow(ctx, `INSERT INTO inventories (product_variant_id) VALUES ($1) RETURNING id`, variantID).Scan(&inventoryID))
 	require.NoError(t, testPool.QueryRow(ctx, `INSERT INTO inventory_items (inventory_id, item_code) VALUES ($1, 'integrity-item') RETURNING id`, inventoryID).Scan(&inventoryItemID))
 
 	_, err = testPool.Exec(ctx, `
@@ -82,7 +82,7 @@ func TestOrderCreateRollsBackOrderAndItemsWhenInventoryReservationFails(t *testi
 	require.NoError(t, testPool.QueryRow(ctx, `INSERT INTO product_details(id,product_id) VALUES($1,$2) RETURNING id`, detailID, productID).Scan(new(string)))
 	require.NoError(t, testPool.QueryRow(ctx, `INSERT INTO product_prices(id,product_detail_id,label,amount) VALUES($1,$2,'default',12) RETURNING id`, priceID, detailID).Scan(new(string)))
 	require.NoError(t, testPool.QueryRow(ctx, `SELECT id FROM create_product_variant($1,$2,NULL,'active',NULL)`, detailID, priceID).Scan(&variantID))
-	require.NoError(t, testPool.QueryRow(ctx, `INSERT INTO inventories(id,product_variant_id,product_price_id) VALUES($1,$2,$3) RETURNING id`, inventoryID, variantID, priceID).Scan(new(string)))
+	require.NoError(t, testPool.QueryRow(ctx, `INSERT INTO inventories(id,product_variant_id) VALUES($1,$2) RETURNING id`, inventoryID, variantID).Scan(new(string)))
 	_, err := testPool.Exec(ctx, `INSERT INTO inventory_items(inventory_id,item_code) VALUES($1,'rollback-item')`, inventoryID)
 	require.NoError(t, err)
 	repo := database.NewOrderRepository(testPool)

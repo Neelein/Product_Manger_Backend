@@ -31,15 +31,15 @@ type ProductDetail struct {
 	UpdatedAt         time.Time `json:"updated_at"`
 }
 type ProductPrice struct {
-	ID              string    `json:"id"`
-	ProductDetailID string    `json:"product_detail_id"`
-	Label           string    `json:"label"`
-	Amount          float64   `json:"amount"`
-	Currency        string    `json:"currency"`
-	SortOrder       int       `json:"sort_order"`
-	InventoryID     *string   `json:"inventory_id"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID               string    `json:"id"`
+	ProductDetailID  string    `json:"product_detail_id"`
+	ProductVariantID *string   `json:"product_variant_id"`
+	Label            string    `json:"label"`
+	Amount           float64   `json:"amount"`
+	Currency         string    `json:"currency"`
+	SortOrder        int       `json:"sort_order"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 type ProductOption struct {
 	ID              string    `json:"id"`

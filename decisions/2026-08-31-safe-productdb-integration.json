@@ -1,0 +1,2 @@
+{"date":"2026-08-31","title":"Isolate productdb integration tests by schema","decision":"Integration tests use a random per-process schema on productdb, with every pool connection configured with that schema first in search_path. Cleanup drops and recreates only that isolated schema; public tables are never reset. The existing public root member is checked before and after the run as the sentinel.","risk":"A process terminated with SIGKILL can leave an integration schema behind; schemas are random and contain no application data."
+}

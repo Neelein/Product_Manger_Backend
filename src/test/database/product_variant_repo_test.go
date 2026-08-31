@@ -81,6 +81,41 @@ func TestProductVariantRepositoryPGX_InventoryByVariant(t *testing.T) {
 	assert.Equal(t, price.ID, got.ProductPriceID)
 }
 
+func TestProductVariantRepositoryPGX_PriceInventoryUsesVariantWithoutDuplicates(t *testing.T) {
+	defer cleanupProducts(t)
+	repo := database.NewProductRepositoryPGX(testPool)
+	product := createTestProduct(t, repo)
+	detail := domain.ProductDetail{ProductID: product.ID}
+	require.NoError(t, repo.CreateDetail(context.Background(), &detail))
+	price := domain.ProductPrice{ProductDetailID: detail.ID, Label: "shared", Amount: 50}
+	require.NoError(t, repo.CreatePrice(context.Background(), &price))
+
+	firstOption := domain.ProductOption{ProductDetailID: detail.ID, Name: "size", Value: "S"}
+	secondOption := domain.ProductOption{ProductDetailID: detail.ID, Name: "size", Value: "L"}
+	require.NoError(t, repo.CreateOption(context.Background(), &firstOption))
+	require.NoError(t, repo.CreateOption(context.Background(), &secondOption))
+	firstVariant := domain.ProductVariant{ProductDetailID: detail.ID, ProductPriceID: price.ID, OptionIDs: []string{firstOption.ID}}
+	secondVariant := domain.ProductVariant{ProductDetailID: detail.ID, ProductPriceID: price.ID, OptionIDs: []string{secondOption.ID}}
+	require.NoError(t, repo.CreateVariant(context.Background(), &firstVariant))
+	require.NoError(t, repo.CreateVariant(context.Background(), &secondVariant))
+
+	invRepo := database.NewInventoryRepositoryPGX(testPool)
+	firstInventory := domain.Inventory{ProductVariantID: firstVariant.ID}
+	secondInventory := domain.Inventory{ProductVariantID: secondVariant.ID}
+	require.NoError(t, invRepo.CreateInventory(context.Background(), &firstInventory))
+	require.NoError(t, invRepo.CreateInventory(context.Background(), &secondInventory))
+
+	prices, err := repo.GetPricesByDetailID(context.Background(), detail.ID)
+	require.NoError(t, err)
+	require.Len(t, prices, 1)
+	assert.Equal(t, price.ID, prices[0].ID)
+	assert.Equal(t, firstVariant.ID, *prices[0].ProductVariantID)
+
+	got, err := repo.GetPriceByID(context.Background(), price.ID)
+	require.NoError(t, err)
+	assert.Equal(t, firstVariant.ID, *got.ProductVariantID)
+}
+
 func TestProductVariantRepositoryPGX_MapsDuplicateSKU(t *testing.T) {
 	defer cleanupProducts(t)
 	repo := database.NewProductRepositoryPGX(testPool)

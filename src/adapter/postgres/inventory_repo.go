@@ -23,7 +23,7 @@ func NewInventoryRepositoryPGX(pool *pgxpool.Pool) *InventoryRepositoryPGX {
 func (r *InventoryRepositoryPGX) scanInventory(row pgx.Row) (*domain.Inventory, error) {
 	var inv domain.Inventory
 	err := row.Scan(
-		&inv.ID, &inv.ProductVariantID, &inv.ProductPriceID, &inv.ProductDetailID, &inv.ProductID, &inv.Name, &inv.Status,
+		&inv.ID, &inv.ProductVariantID, &inv.ProductPriceID, &inv.ProductDetailID, &inv.ProductID, &inv.Name, &inv.VariantName, &inv.Status,
 		&inv.TotalQuantity, &inv.SoldQuantity,
 		&inv.CreatedAt, &inv.UpdatedAt,
 	)
@@ -42,18 +42,8 @@ func (r *InventoryRepositoryPGX) CreateInventory(
 		status = "銷售中"
 	}
 
-	variantID := inventory.ProductVariantID
-	if variantID == "" {
-		err := r.pool.QueryRow(ctx, "SELECT id FROM product_variants WHERE product_price_id = $1 ORDER BY created_at LIMIT 1", inventory.ProductPriceID).Scan(&variantID)
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return domain.ErrInvalidProductVariant
-			}
-			return fmt.Errorf("resolving inventory variant: %w", err)
-		}
-	}
 	err := r.pool.QueryRow(ctx, "SELECT * FROM create_inventory($1, $2)",
-		variantID, status,
+		inventory.ProductVariantID, status,
 	).Scan(&inventory.ID, &inventory.CreatedAt, &inventory.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("creating inventory: %w", err)
@@ -103,7 +93,7 @@ func (r *InventoryRepositoryPGX) ListInventories(
 	inventories, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (domain.Inventory, error) {
 		var inv domain.Inventory
 		err := row.Scan(
-			&inv.ID, &inv.ProductVariantID, &inv.ProductPriceID, &inv.ProductDetailID, &inv.ProductID, &inv.Name, &inv.Status,
+			&inv.ID, &inv.ProductVariantID, &inv.ProductPriceID, &inv.ProductDetailID, &inv.ProductID, &inv.Name, &inv.VariantName, &inv.Status,
 			&inv.TotalQuantity, &inv.SoldQuantity,
 			&inv.CreatedAt, &inv.UpdatedAt,
 		)

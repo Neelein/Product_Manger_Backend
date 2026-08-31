@@ -1,0 +1,7 @@
+{
+  "date": "2026-08-31",
+  "decision": "Make inventory creation strictly variant-based by removing product_price_id from CreateInventoryRequest and rejecting unknown request fields, including the legacy product_price_id field. Remove the repository fallback that selected the first variant for a price.",
+  "rationale": "ProductPrice.InventoryID has already been removed and inventories are owned by product variants. Accepting a price-level create input would leave a legacy path that could create inventory without an explicit variant.",
+  "compatibility": "This is an intentional breaking change for POST /api/inventories request bodies. Inventory response product_price_id remains because it is a derived response field needed by existing consumers; GetInventoryByPriceID remains a read compatibility path and is not used for creation.",
+  "validation": "Added authenticated API coverage for variant creation and rejection of product_price_id, and updated PostgreSQL integration fixtures to create variants explicitly."
+}

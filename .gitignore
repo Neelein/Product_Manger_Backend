@@ -15,6 +15,7 @@ server
 
 # Environment
 dotenv.env
+*.env
 .env
 
 # opencode config

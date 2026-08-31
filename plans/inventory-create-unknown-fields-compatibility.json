@@ -1,0 +1,9 @@
+{
+  "title": "Allow unknown fields in inventory creation requests",
+  "plan": [
+    "Remove strict unknown-field decoding from CreateInventory while preserving product_variant_id and status mapping.",
+    "Update the authenticated API regression test to prove a valid variant request succeeds when it includes the legacy product_price_id field.",
+    "Run focused Go tests, the broader backend test suite, and the shared documentation validation workflow."
+  ],
+  "contract": "POST /api/inventories ignores unknown JSON fields; product_variant_id remains the creation identity and product_price_id is not used for creation."
+}

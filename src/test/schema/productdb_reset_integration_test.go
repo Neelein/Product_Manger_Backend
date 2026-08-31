@@ -41,7 +41,7 @@ func TestProductDBResetAndRootSeed(t *testing.T) {
 	if err := pool.QueryRow(ctx, "SELECT version, dirty FROM public.schema_migrations").Scan(&version, &dirty); err != nil {
 		t.Fatal(err)
 	}
-	if version != 20 || dirty {
+	if version != 22 || dirty {
 		t.Fatalf("unexpected migration state: version=%d dirty=%t", version, dirty)
 	}
 

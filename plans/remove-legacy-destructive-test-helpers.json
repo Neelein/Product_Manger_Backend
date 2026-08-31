@@ -1,0 +1,11 @@
+{
+  "title": "Remove legacy destructive integration-test helpers",
+  "scope": "Delete the unused dropTables, runMigration, and ensureTestDatabase helpers from the integration tests, remove only their imports, and preserve safeintegration schema cleanup.",
+  "plan": [
+    "Confirm the three helpers have no references outside their definitions.",
+    "Remove the helpers and imports used only by them without changing production code or safeintegration cleanup.",
+    "Keep or add a static regression test that prevents the legacy helpers from returning.",
+    "Update the decision record and shared change log, then run formatting and the requested backend/documentation validation commands."
+  ],
+  "safety": "Do not execute DROP, TRUNCATE, or broad DELETE statements; do not modify production code; preserve safeintegration schema reset and teardown."
+}

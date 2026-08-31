@@ -1,0 +1,9 @@
+{
+  "title": "Require backend model unused-field review",
+  "plan": [
+    "Update the project backend-engineer agent instruction, preserving existing rules, to require an unused-field review for every backend implementation or modification.",
+    "Require repository-wide reference searches covering code, tests, migrations, serialization tags, JSON fixtures, and API consumers before classifying a model field as unused.",
+    "Require JSON/API contract and persistence checks, necessary regression tests, and an explicit breaking-change review; remove only fields confirmed unused and not contractually required."
+  ],
+  "scope": "Agent instruction and workflow documentation only; do not modify production code, tests, or runtime configuration."
+}

@@ -17,8 +17,7 @@ import (
 
 func cleanupCategories(t *testing.T) {
 	t.Helper()
-	_, err := testPool.Exec(context.Background(), "TRUNCATE TABLE categories CASCADE")
-	require.NoError(t, err)
+	require.NoError(t, testHarness.Reset(context.Background()))
 }
 
 func TestCategoryRepositoryPGX_Create(t *testing.T) {

@@ -1,0 +1,7 @@
+{
+  "date": "2026-08-31",
+  "decision": "CreateInventory no longer rejects unknown JSON fields.",
+  "rationale": "The current frontend sends product_variant_id and status only, and the backend does not need to block omitted or extra fields while the request contract evolves.",
+  "compatibility": "POST /api/inventories continues to create from product_variant_id; unknown fields such as product_price_id are ignored rather than causing a 400 response.",
+  "validation": "Update the integration API regression test to submit a valid variant request with product_price_id and assert creation succeeds."
+}

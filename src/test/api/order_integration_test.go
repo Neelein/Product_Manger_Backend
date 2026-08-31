@@ -69,8 +69,15 @@ func newOrderAPIFixture(t *testing.T, firstStock, secondStock int) *orderAPIFixt
 	require.NoError(t, productRepo.CreatePrice(ctx, &price))
 	secondPrice := model.ProductPrice{ProductDetailID: detail.ID, Label: "API second price", Amount: 80, Currency: "TWD"}
 	require.NoError(t, productRepo.CreatePrice(ctx, &secondPrice))
+	variants, err := productRepo.ListVariantsByDetailID(ctx, detail.ID)
+	require.NoError(t, err)
+	require.Len(t, variants, 2)
+	variantsByPrice := make(map[string]string, len(variants))
+	for _, variant := range variants {
+		variantsByPrice[variant.ProductPriceID] = variant.ID
+	}
 	createInventory := func(priceID string, quantity int) {
-		inventory := model.Inventory{ProductPriceID: priceID, Status: "銷售中"}
+		inventory := model.Inventory{ProductVariantID: variantsByPrice[priceID], Status: "銷售中"}
 		require.NoError(t, inventoryRepo.CreateInventory(ctx, &inventory))
 		for i := 0; i < quantity; i++ {
 			require.NoError(t, inventoryRepo.CreateItem(ctx, &model.InventoryItem{InventoryID: inventory.ID, ItemCode: priceID + "-" + string(rune('a'+i)), Status: "可用"}))
@@ -87,10 +94,7 @@ func newOrderAPIFixture(t *testing.T, firstStock, secondStock int) *orderAPIFixt
 	f := &orderAPIFixture{router: router, customer: customer, other: other, staff: staff, customerSession: newSession(customer.ID), otherSession: newSession(other.ID), staffSession: newSession(staff.ID), priceID: price.ID, secondPriceID: secondPrice.ID, productID: product.ID, sessions: sessions}
 	t.Cleanup(func() {
 		sessions.Stop()
-		_, _ = testPool.Exec(ctx, `DELETE FROM payments WHERE order_id IN (SELECT id FROM orders WHERE customer_id = ANY($1::uuid[]))`, []string{customer.ID, other.ID, staff.ID})
-		_, _ = testPool.Exec(ctx, `DELETE FROM orders WHERE customer_id = ANY($1::uuid[])`, []string{customer.ID, other.ID, staff.ID})
-		_, _ = testPool.Exec(ctx, `DELETE FROM products WHERE id=$1`, product.ID)
-		_, _ = testPool.Exec(ctx, `DELETE FROM members WHERE id = ANY($1::uuid[])`, []string{customer.ID, other.ID, staff.ID})
+		require.NoError(t, testHarness.Reset(ctx))
 	})
 	return f
 }

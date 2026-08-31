@@ -283,3 +283,50 @@ func TestDomainEntitiesHaveNoAdapterDependencies(t *testing.T) {
 		}
 	}
 }
+
+func TestIntegrationTestsDoNotContainLegacyDestructiveHelpers(t *testing.T) {
+	for _, file := range []string{
+		"src/test/api/handler_test.go",
+		"src/test/database/product_repo_test.go",
+	} {
+		text := source(t, file)
+		for _, helper := range []string{"dropTables", "runMigration", "ensureTestDatabase"} {
+			if strings.Contains(text, "func "+helper+"(") {
+				t.Fatalf("integration test file %s still defines legacy helper %s", file, helper)
+			}
+		}
+		if !strings.Contains(text, "backend/src/test/safeintegration") || !strings.Contains(text, "safeintegration.Open") {
+			t.Fatalf("integration test file %s does not use safeintegration harness", file)
+		}
+	}
+}
+
+func TestIntegrationWorkflowTargetsProductDBExplicitly(t *testing.T) {
+	workflow := source(t, ".github/workflows/cicd.yml")
+	if !strings.Contains(workflow, "POSTGRES_DB: productdb") {
+		t.Fatal("integration service must provision the productdb database")
+	}
+	if !strings.Contains(workflow, "DATABASE_URL: postgres://root:root123@localhost:5432/productdb?sslmode=disable") {
+		t.Fatal("integration job must explicitly provide DATABASE_URL targeting productdb")
+	}
+	if strings.Contains(workflow, "TEST_DATABASE_URL") {
+		t.Fatal("integration workflow must not use the removed TEST_DATABASE_URL")
+	}
+	migration := "run: go run . migrate"
+	migrationIndex := strings.Index(workflow, migration)
+	seed := "run: go run ./src/test/seed_integration"
+	seedIndex := strings.Index(workflow, seed)
+	testIndex := strings.Index(workflow, "go test -tags=integration")
+	if migrationIndex == -1 || seedIndex == -1 || testIndex == -1 || migrationIndex > seedIndex || seedIndex > testIndex {
+		t.Fatal("integration workflow must migrate and seed productdb before tests")
+	}
+}
+
+func TestProductionMigrationsDoNotSeedMembersOrZeroMemberIDs(t *testing.T) {
+	for _, file := range []string{"db/migrations/003_add_member_id_to_products.up.sql", "db/migrations/009_set_not_null.up.sql", "db/migrations/014_insert_admin_member.up.sql"} {
+		text := source(t, file)
+		if strings.Contains(text, "INSERT INTO members") || strings.Contains(text, "00000000-0000-0000-0000-000000000000") {
+			t.Fatalf("production migration %s contains a test member fixture", file)
+		}
+	}
+}

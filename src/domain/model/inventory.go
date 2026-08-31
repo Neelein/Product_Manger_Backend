@@ -9,6 +9,7 @@ type Inventory struct {
 	ProductDetailID  string    `json:"product_detail_id"`
 	ProductID        string    `json:"product_id"`
 	Name             string    `json:"name"`
+	VariantName      string    `json:"variant_name"`
 	Status           string    `json:"status"`
 	TotalQuantity    int       `json:"total_quantity"`
 	SoldQuantity     int       `json:"sold_quantity"`

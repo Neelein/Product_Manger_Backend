@@ -25,13 +25,13 @@ func (h *InventoryHandler) CreateInventory(w http.ResponseWriter, r *http.Reques
 	}
 
 	var req CreateInventoryRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	inventory := Inventory{
 		ProductVariantID: req.ProductVariantID,
-		ProductPriceID:   req.ProductPriceID,
 		Status:           req.Status,
 	}
 

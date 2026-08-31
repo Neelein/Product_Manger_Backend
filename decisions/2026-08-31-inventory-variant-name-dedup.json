@@ -1,0 +1,7 @@
+{
+  "date": "2026-08-31",
+  "decision": "In migration 021, aggregate persisted variant option labels per variant before joining inventory item quantities; use a separate quantity aggregate so each option label is emitted once and item counts retain their existing meaning.",
+  "rationale": "Joining product_variant_options and inventory_items in one grouped query creates a multiplication row for every option-item pair, which repeats variant labels such as 尺寸: 大型 when an inventory has multiple items.",
+  "compatibility": "Inventory identifiers, status, timestamps, display formatting, and total/sold quantity semantics remain unchanged; only duplicate option labels are removed.",
+  "validation": "Add PostgreSQL-backed repository regression coverage with one option-bearing inventory and multiple items, review related integration fixtures for duplicate option combinations, and run focused, full, vet, integration, and shared documentation tests."
+}

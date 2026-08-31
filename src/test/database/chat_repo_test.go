@@ -17,10 +17,7 @@ import (
 
 func cleanupChat(t *testing.T) {
 	t.Helper()
-	_, err := testPool.Exec(context.Background(), "TRUNCATE TABLE read_receipts, chat_messages, chat_room_members, chat_rooms CASCADE")
-	require.NoError(t, err)
-	_, err = testPool.Exec(context.Background(), "DELETE FROM members WHERE id != '00000000-0000-0000-0000-000000000000'")
-	require.NoError(t, err)
+	require.NoError(t, testHarness.Reset(context.Background()))
 }
 
 var chatMemberCounter int
