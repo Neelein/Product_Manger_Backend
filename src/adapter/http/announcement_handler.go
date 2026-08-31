@@ -40,6 +40,38 @@ func prepareUploadedFile(r *http.Request, field string, uploadDir string) (strin
 	return filename, &usecase.UploadInput{Directory: uploadDir, Filename: filename, Content: bytes.NewReader(content)}, nil
 }
 
+func prepareAnnouncementImage(r *http.Request, uploadDir string) (string, *usecase.UploadInput, error) {
+	file, _, err := r.FormFile("image")
+	if err != nil {
+		return "", nil, nil
+	}
+	defer file.Close()
+
+	content, err := io.ReadAll(io.LimitReader(file, 10<<20+1))
+	if err != nil {
+		return "", nil, fmt.Errorf("reading image: %w", err)
+	}
+	if len(content) > 10<<20 {
+		return "", nil, fmt.Errorf("announcement image must be 10 MB or smaller")
+	}
+
+	ext := map[string]string{
+		"image/jpeg": ".jpg",
+		"image/png":  ".png",
+		"image/webp": ".webp",
+	}[http.DetectContentType(content)]
+	if ext == "" {
+		return "", nil, fmt.Errorf("only JPEG, PNG, and WebP images are supported")
+	}
+
+	filename := uuid.NewString() + ext
+	return filename, &usecase.UploadInput{
+		Directory: uploadDir,
+		Filename:  filename,
+		Content:   bytes.NewReader(content),
+	}, nil
+}
+
 func (h *AnnouncementHandler) CreateAnnouncement(w http.ResponseWriter, r *http.Request) {
 	member := MemberFromContext(r.Context())
 	if member == nil {
@@ -56,9 +88,9 @@ func (h *AnnouncementHandler) CreateAnnouncement(w http.ResponseWriter, r *http.
 	content := r.FormValue("content")
 
 	imagePath := ""
-	filename, upload, err := prepareUploadedFile(r, "image", filepath.Join(os.Getenv("MEDIA_ROOT"), "images/announcements"))
+	filename, upload, err := prepareAnnouncementImage(r, filepath.Join(os.Getenv("MEDIA_ROOT"), "images/announcements"))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	if filename != "" {
@@ -170,9 +202,9 @@ func (h *AnnouncementHandler) UpdateAnnouncement(w http.ResponseWriter, r *http.
 	content := r.FormValue("content")
 	imagePath := r.FormValue("image_path")
 
-	filename, upload, err := prepareUploadedFile(r, "image", filepath.Join(os.Getenv("MEDIA_ROOT"), "images/announcements"))
+	filename, upload, err := prepareAnnouncementImage(r, filepath.Join(os.Getenv("MEDIA_ROOT"), "images/announcements"))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	if filename != "" {
