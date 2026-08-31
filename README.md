@@ -24,10 +24,8 @@ RESTful product, inventory, and member management API built with Go, gorilla/mux
 # 1. Start PostgreSQL
 docker compose up -d
 
-# 2. Apply migrations manually (or via test DB setup)
-# Run migrations 001 through 022 in db/migrations/ against the database:
-psql -h localhost -U root -d productdb -f db/migrations/001_create_products.up.sql
-# ... repeat through 022, in numeric order
+# 2. Apply migrations with the supported migration runner
+DATABASE_URL=postgres://root:root123@localhost:5432/productdb?sslmode=disable go run . migrate
 
 # 3. Start server
 DATABASE_URL=postgres://root:root123@localhost:5432/productdb?sslmode=disable go run main.go
@@ -53,9 +51,10 @@ make test
 DATABASE_URL=postgres://root:root123@localhost:5432/productdb?sslmode=disable make test-integration-productdb
 ```
 
-CI provisions PostgreSQL with the `productdb` database and passes the same
-`DATABASE_URL` explicitly. The CI credentials are disposable service-container
-credentials, not application or repository secrets.
+CI provisions PostgreSQL with the `productdb` database, runs `go run . migrate`
+before integration tests, and passes the same `DATABASE_URL` explicitly. The CI
+credentials are disposable service-container credentials, not application or
+repository secrets.
 
 Integration tests do not use `TEST_DATABASE_URL`. Each run creates a random schema,
 configures every test pool connection with that schema first in `search_path`, and

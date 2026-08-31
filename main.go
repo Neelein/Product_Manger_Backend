@@ -52,6 +52,12 @@ func main() {
 	if databaseURL == "" {
 		log.Fatal("DATABASE_URL is not set")
 	}
+	if len(os.Args) > 1 && os.Args[1] == "migrate" {
+		if err := runMigrations(databaseURL); err != nil {
+			log.Fatalf("migration failed: %v", err)
+		}
+		return
+	}
 
 	secret := os.Getenv("API_GATEWAY_SECRET")
 

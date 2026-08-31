@@ -312,4 +312,10 @@ func TestIntegrationWorkflowTargetsProductDBExplicitly(t *testing.T) {
 	if strings.Contains(workflow, "TEST_DATABASE_URL") {
 		t.Fatal("integration workflow must not use the removed TEST_DATABASE_URL")
 	}
+	migration := "run: go run . migrate"
+	migrationIndex := strings.Index(workflow, migration)
+	testIndex := strings.Index(workflow, "go test -tags=integration")
+	if migrationIndex == -1 || testIndex == -1 || migrationIndex > testIndex {
+		t.Fatal("integration workflow must initialize productdb with the supported migration command before tests")
+	}
 }
