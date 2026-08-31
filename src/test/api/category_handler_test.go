@@ -44,7 +44,7 @@ func setupCategoryRouter() (*database.MemberRepositoryPGX, *session.SessionCache
 
 func cleanupCategories(t *testing.T) {
 	t.Helper()
-	_, _ = testPool.Exec(context.Background(), "TRUNCATE TABLE categories CASCADE")
+	require.NoError(t, testHarness.Reset(context.Background()))
 }
 
 func doCategoryReq(t *testing.T, r *mux.Router, method, path string, body []byte, cookie *http.Cookie) *httptest.ResponseRecorder {

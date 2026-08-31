@@ -1,0 +1,7 @@
+{
+  "date": "2026-08-30",
+  "decision": "Make backend model unused-field review mandatory in the backend-engineer agent instruction.",
+  "rationale": "Dead model fields create misleading data structures, but fields used by persistence, serialization, or external JSON/API contracts must not be removed without review. The instruction therefore requires repository-wide reference searches, contract checks, tests, and breaking-change assessment before removal.",
+  "validation": "Validate the OpenCode team configuration, run the shared documentation generator and tests, verify the generated date page contains this entry, and run git diff --check.",
+  "impact": "Agent workflow only. No production code, tests, or runtime configuration are changed. OpenCode must be restarted to load the updated agent instruction."
+}

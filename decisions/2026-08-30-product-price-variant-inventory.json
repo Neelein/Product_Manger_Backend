@@ -1,0 +1,7 @@
+{
+  "date": "2026-08-30",
+  "decision": "Resolve product-price inventory associations through product_variants.product_price_id -> inventories.product_variant_id, not through inventories.product_price_id.",
+  "rationale": "Migration 017 makes product_variant_id the authoritative inventory relationship and permits multiple variants to share one price. Price endpoints therefore return exactly one row per price and expose nullable product_variant_id and inventory_id for a deterministic representative, preferring a variant with inventory and then creation order.",
+  "validation": "Migration 021 backfills missing variant links, aborts on mismatched legacy data, removes the legacy column and constraints, and recreates inventory/price functions. Repository, schema, inventory, and order integration tests verify variant-based linkage, no duplicate price rows, and order reservations after the column removal.",
+  "frontend_impact": "The admin frontend currently displays variant inventory from the inventories endpoint keyed by product_variant_id and does not consume price inventory fields. No frontend change is included."
+}

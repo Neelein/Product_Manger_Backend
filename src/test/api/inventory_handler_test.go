@@ -53,6 +53,14 @@ func createTestPriceForHandler(t *testing.T, productRepo *database.ProductReposi
 	return price
 }
 
+func inventoryForHandler(t *testing.T, productRepo *database.ProductRepositoryPGX, price domain.ProductPrice) domain.Inventory {
+	t.Helper()
+	variants, err := productRepo.ListVariantsByDetailID(context.Background(), price.ProductDetailID)
+	require.NoError(t, err)
+	require.NotEmpty(t, variants)
+	return domain.Inventory{ProductVariantID: variants[0].ID}
+}
+
 func executeRequestWithVarsAndMember(
 	method, path string,
 	body []byte,
@@ -88,7 +96,6 @@ func TestInventoryHandler_CreateInventory(t *testing.T) {
 		{
 			name: "valid inventory",
 			body: domain.CreateInventoryRequest{
-				ProductPriceID:   price.ID,
 				ProductVariantID: variants[0].ID,
 				Status:           "銷售中",
 			},
@@ -133,9 +140,7 @@ func TestInventoryHandler_CreateInventory_Unauthorized(t *testing.T) {
 	defer cleanupProducts(t)
 	_, _, _, _, handler := setupInventoryTest(t)
 
-	body, _ := json.Marshal(domain.CreateInventoryRequest{
-		ProductPriceID: "some-id",
-	})
+	body := []byte(`{"product_price_id":"some-id"}`)
 
 	w := executeRequest(http.MethodPost, "/api/inventories", body, handler.CreateInventory)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
@@ -147,12 +152,10 @@ func TestInventoryHandler_ListInventories(t *testing.T) {
 	price1 := createTestPriceForHandler(t, productRepo)
 	price2 := createTestPriceForHandler(t, productRepo)
 
-	invRepo.CreateInventory(context.Background(), &domain.Inventory{
-		ProductPriceID: price1.ID,
-	})
-	invRepo.CreateInventory(context.Background(), &domain.Inventory{
-		ProductPriceID: price2.ID,
-	})
+	inv1 := inventoryForHandler(t, productRepo, price1)
+	inv2 := inventoryForHandler(t, productRepo, price2)
+	invRepo.CreateInventory(context.Background(), &inv1)
+	invRepo.CreateInventory(context.Background(), &inv2)
 
 	w := executeRequest(http.MethodGet, "/api/inventories", nil, handler.ListInventories)
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -181,9 +184,7 @@ func TestInventoryHandler_GetInventory(t *testing.T) {
 	invRepo, productRepo, _, _, handler := setupInventoryTest(t)
 	price := createTestPriceForHandler(t, productRepo)
 
-	created := domain.Inventory{
-		ProductPriceID: price.ID,
-	}
+	created := inventoryForHandler(t, productRepo, price)
 	invRepo.CreateInventory(context.Background(), &created)
 
 	tests := []struct {
@@ -219,6 +220,8 @@ func TestInventoryHandler_GetInventory(t *testing.T) {
 				err := json.NewDecoder(w.Body).Decode(&resp)
 				assert.NoError(t, err)
 				assert.Equal(t, created.ID, resp.Inventory.ID)
+				assert.NotEmpty(t, resp.Inventory.Name)
+				assert.Empty(t, resp.Inventory.VariantName)
 			}
 		})
 	}
@@ -230,9 +233,7 @@ func TestInventoryHandler_UpdateInventory(t *testing.T) {
 	member := createAuthMember(t, memberRepo, sessionCache)
 	price := createTestPriceForHandler(t, productRepo)
 
-	created := domain.Inventory{
-		ProductPriceID: price.ID,
-	}
+	created := inventoryForHandler(t, productRepo, price)
 	invRepo.CreateInventory(context.Background(), &created)
 
 	tests := []struct {
@@ -322,9 +323,7 @@ func TestInventoryHandler_DeleteInventory(t *testing.T) {
 	member := createAuthMember(t, memberRepo, sessionCache)
 	price := createTestPriceForHandler(t, productRepo)
 
-	created := domain.Inventory{
-		ProductPriceID: price.ID,
-	}
+	created := inventoryForHandler(t, productRepo, price)
 	invRepo.CreateInventory(context.Background(), &created)
 
 	tests := []struct {
@@ -379,9 +378,7 @@ func TestInventoryHandler_CreateItem(t *testing.T) {
 	member := createAuthMember(t, memberRepo, sessionCache)
 	price := createTestPriceForHandler(t, productRepo)
 
-	inventory := domain.Inventory{
-		ProductPriceID: price.ID,
-	}
+	inventory := inventoryForHandler(t, productRepo, price)
 	invRepo.CreateInventory(context.Background(), &inventory)
 
 	tests := []struct {
@@ -466,9 +463,7 @@ func TestInventoryHandler_ListItems(t *testing.T) {
 	invRepo, productRepo, _, _, handler := setupInventoryTest(t)
 	price := createTestPriceForHandler(t, productRepo)
 
-	inventory := domain.Inventory{
-		ProductPriceID: price.ID,
-	}
+	inventory := inventoryForHandler(t, productRepo, price)
 	invRepo.CreateInventory(context.Background(), &inventory)
 
 	invRepo.CreateItem(context.Background(), &domain.InventoryItem{
@@ -498,9 +493,7 @@ func TestInventoryHandler_ListItems_Empty(t *testing.T) {
 	invRepo, productRepo, _, _, handler := setupInventoryTest(t)
 	price := createTestPriceForHandler(t, productRepo)
 
-	inventory := domain.Inventory{
-		ProductPriceID: price.ID,
-	}
+	inventory := inventoryForHandler(t, productRepo, price)
 	invRepo.CreateInventory(context.Background(), &inventory)
 
 	w := executeRequestWithVars(
@@ -523,9 +516,7 @@ func TestInventoryHandler_GetItem(t *testing.T) {
 	invRepo, productRepo, _, _, handler := setupInventoryTest(t)
 	price := createTestPriceForHandler(t, productRepo)
 
-	inventory := domain.Inventory{
-		ProductPriceID: price.ID,
-	}
+	inventory := inventoryForHandler(t, productRepo, price)
 	invRepo.CreateInventory(context.Background(), &inventory)
 
 	created := domain.InventoryItem{
@@ -585,9 +576,7 @@ func TestInventoryHandler_UpdateItem(t *testing.T) {
 	member := createAuthMember(t, memberRepo, sessionCache)
 	price := createTestPriceForHandler(t, productRepo)
 
-	inventory := domain.Inventory{
-		ProductPriceID: price.ID,
-	}
+	inventory := inventoryForHandler(t, productRepo, price)
 	invRepo.CreateInventory(context.Background(), &inventory)
 
 	created := domain.InventoryItem{
@@ -692,9 +681,7 @@ func TestInventoryHandler_DeleteItem(t *testing.T) {
 	member := createAuthMember(t, memberRepo, sessionCache)
 	price := createTestPriceForHandler(t, productRepo)
 
-	inventory := domain.Inventory{
-		ProductPriceID: price.ID,
-	}
+	inventory := inventoryForHandler(t, productRepo, price)
 	invRepo.CreateInventory(context.Background(), &inventory)
 
 	created := domain.InventoryItem{

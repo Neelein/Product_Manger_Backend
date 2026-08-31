@@ -1,0 +1,9 @@
+{
+  "title": "Link product prices to variant inventories",
+  "plan": [
+    "Define the price response as one row per product price; resolve variant inventory only through product_variants.product_price_id and inventories.product_variant_id.",
+    "Remove ProductPrice.InventoryID and its JSON field. Price responses retain nullable product_variant_id only; inventory is queried and returned by inventory endpoints keyed by product_variant_id.",
+    "Update every SQL function contract, repository scan, fixture, and expectation without changing Inventory.InventoryID or InventoryItem.InventoryID; cover the JSON/API breaking change and variant linkage with focused and integration tests."
+  ],
+  "contract": "GET price list and GET price return id, product_detail_id, label, amount, currency, sort_order, nullable product_variant_id, created_at, and updated_at. ProductPrice never returns inventory_id. Inventory product_price_id, where present in inventory responses, remains derived from product_variants and inventory itself retains its inventory_id contract."
+}

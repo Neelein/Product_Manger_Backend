@@ -1,0 +1,12 @@
+{
+  "title": "Expose product variant names in inventory responses",
+  "plan": [
+    "Inspect the inventory model, PostgreSQL functions, HTTP response boundary, migrations, and existing inventory/order tests for the current variant relationship.",
+    "Add an authoritative variant_name response field and make the existing inventory name include the product, price label, and option labels derived from the persisted product variant; keep product_price_id as the existing derived compatibility field.",
+    "Update the PostgreSQL inventory functions and repository scanning contract together, add API/database regression coverage for option labels and no-option variants, and preserve inventory/order behavior unrelated to display naming.",
+    "Fix migration 021 so option aggregation is independent from inventory-item quantity aggregation; add regression coverage proving multiple items do not duplicate variant labels while total and sold quantities remain unchanged.",
+    "Review related integration fixtures for duplicate option combinations and correct only directly related fixture setup where safe.",
+    "Run gofmt, focused tests, go test, go vet, integration tests when the configured PostgreSQL database is available, and the required shared docs validation."
+  ],
+  "contract": "GET /api/inventories and GET /api/inventories/{inventoryId} return inventory.variant_name as the authoritative persisted-variant display label. inventory.name remains present and is server-composed as product name, price label, and variant_name when non-empty; clients must not reconstruct it from IDs or partial product data."
+}

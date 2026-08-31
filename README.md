@@ -25,9 +25,9 @@ RESTful product, inventory, and member management API built with Go, gorilla/mux
 docker compose up -d
 
 # 2. Apply migrations manually (or via test DB setup)
-# Run each migration in db/migrations/ against the database:
-psql -h localhost -U root -d productdb -f db/migrations/001_create_products.sql
-# ... repeat for 002 through 009
+# Run migrations 001 through 022 in db/migrations/ against the database:
+psql -h localhost -U root -d productdb -f db/migrations/001_create_products.up.sql
+# ... repeat through 022, in numeric order
 
 # 3. Start server
 DATABASE_URL=postgres://root:root123@localhost:5432/productdb?sslmode=disable go run main.go
@@ -40,7 +40,6 @@ Server starts on `:8080`. Health check: `GET /api/health`.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DATABASE_URL` | — | PostgreSQL connection string |
-| `TEST_DATABASE_URL` | — | Test database connection string |
 
 A `dotenv.env` file with defaults is provided.
 
@@ -50,14 +49,21 @@ A `dotenv.env` file with defaults is provided.
 # Unit tests
 make test
 
-# Integration tests (requires test database running)
-make test-integration
+# Safe integration tests (uses a random schema inside productdb; public data is never reset)
+DATABASE_URL=postgres://root:root123@localhost:5432/productdb?sslmode=disable make test-integration-productdb
 ```
+
+Integration tests do not use `TEST_DATABASE_URL`. Each run creates a random schema,
+configures every test pool connection with that schema first in `search_path`, and
+drops only that schema during cleanup. The public `root@gmail.com` member is checked
+as a sentinel before and after the run. Do not interrupt the process while it is
+creating the schema; an orphaned `integration_*` schema is harmless and can be
+reported for manual review rather than resetting productdb.
 
 ### Storefront browser E2E fixture
 
 The repeatable fixture command reads `DATABASE_URL` and defaults to the dedicated
-database `productdb_storefront_e2e`. Apply migrations 001 through 020 first, and
+database `productdb_storefront_e2e`. Apply migrations 001 through 022 first, and
 create that database if it does not exist. The command only upserts the fixed
 category, product, detail, and two prices; it does not truncate other data. It
 also verifies the resulting rows before exiting successfully.
@@ -90,13 +96,13 @@ src/
 ├── database/     # pgx repository implementations
 └── test/         # Unit + integration tests
 db/
-└── migrations/   # SQL migrations (1-9)
+└── migrations/   # SQL migrations (001-022, .up.sql)
 ```
 
 ### Design Patterns
 
 - **Repository pattern** — interfaces in `domain/`, implementations in `database/`
-- **Stored functions** — all CRUD via PostgreSQL functions (migration 008), called as `SELECT * FROM function_name(...)`
+- **Stored functions** — all CRUD via PostgreSQL functions (migration 006), called as `SELECT * FROM function_name(...)`
 - **Session auth** — in-memory session cache with TTL; `X-Session-Key` + `X-Device-Fingerprint` headers; rotation on each request
 - **Computed fields** — inventory `total_quantity` / `sold_quantity` computed via SQL LEFT JOIN + GROUP BY
 
@@ -115,10 +121,14 @@ products 1──1 product_details 1──N product_prices
 ### Inventory
 
 ```
-product_prices 1──1 inventories 1──N inventory_items
+product_prices 1──N product_variants 1──N inventories 1──N inventory_items
 ```
 
-- **inventories** — linked to product_price_id (UNIQUE), computed name as `{product name}-{price label}`
+Price responses do not include `inventory_id`. Inventory is related to a price
+through `product_variant_id` and must be queried from the inventory endpoints;
+`InventoryID` remains part of inventory and inventory-item responses.
+
+- **inventories** — linked to product variants through `product_variant_id`, computed name as `{product name}-{price label}`
 - **inventory_items** — individual units with item_code, status, cost, date_added
 
 ### Members
@@ -195,16 +205,34 @@ Authenticated endpoints require two headers:
 
 Sessions rotate on each authenticated request (old key becomes invalid, new key returned).
 
+Inventory creation requires `product_variant_id` (and optionally `status`). `CreateInventory`
+does not use the legacy `product_price_id` request field; unknown JSON fields, including
+`product_price_id`, are currently ignored. `product_price_id` may still appear in inventory
+responses as a value derived through the variant relationship.
+
 ## Migrations
 
 | # | File | Description |
 |---|------|-------------|
-| 1 | `001_create_products.sql` | products, product_details, product_prices tables |
-| 2 | `002_create_members.sql` | members table |
-| 3 | `003_add_member_id_to_products.sql` | member_id FK on products |
-| 4 | `004_alter_product_details.sql` | Redesign product_details columns |
-| 5 | `005_remove_products_description.sql` | Drop description from products |
-| 6 | `006_create_inventory.sql` | inventories, inventory_items tables |
-| 7 | `007_simplify_inventories.sql` | Drop redundant inventory columns |
-| 8 | `008_create_functions.sql` | All CRUD stored functions |
-| 9 | `009_add_inventory_id_to_price_functions.sql` | Add inventory_id to price functions |
+| 001 | `001_create_products.up.sql` | products, product_details, product_prices tables |
+| 002 | `002_create_members.up.sql` | members table |
+| 003 | `003_add_member_id_to_products.up.sql` | member_id FK on products |
+| 004 | `004_create_inventory.up.sql` | inventories, inventory_items tables |
+| 005 | `005_simplify_inventories.up.sql` | Simplify inventory columns |
+| 006 | `006_create_functions.up.sql` | CRUD stored functions |
+| 007 | `007_add_inventory_id_to_price_functions.up.sql` | Define price functions without a direct inventory column |
+| 008 | `008_create_announcements.up.sql` | announcements table and functions |
+| 009 | `009_set_not_null.up.sql` | Set required columns to NOT NULL |
+| 010 | `010_create_chat.up.sql` | chat rooms, messages, memberships, and receipts |
+| 011 | `011_list_members.up.sql` | Member listing function |
+| 012 | `012_create_events.up.sql` | events and event viewers |
+| 013 | `013_add_monthly_filters.up.sql` | Monthly event filters |
+| 014 | `014_insert_admin_member.up.sql` | Seed administrator member |
+| 015 | `015_create_registration_codes.up.sql` | registration_codes table and functions |
+| 016 | `016_create_categories.up.sql` | categories table and functions |
+| 017 | `017_create_product_variants.up.sql` | product variants and variant options; link inventories to variants |
+| 018 | `018_members_orders.up.sql` | orders, order items, and status history |
+| 019 | `019_create_payments.up.sql` | payments table and functions |
+| 020 | `020_create_product_images.up.sql` | product image metadata and functions |
+| 021 | `021_link_price_inventory_by_variant.up.sql` | Link inventory and price lookups through product variants |
+| 022 | `022_repair_inventory_function_contract.up.sql` | Repair inventory function return contracts |

@@ -1,0 +1,7 @@
+{
+  "date": "2026-08-31",
+  "decision": "Derive inventory.variant_name in PostgreSQL from the product variant's persisted option labels, and compose inventory.name on the backend from product name, price label, and variant name. Keep the existing derived product_price_id field and all inventory ownership/query paths unchanged.",
+  "rationale": "Inventory responses must provide a complete, authoritative variant label so the frontend does not need to join option IDs or guess how to format a variant name. The current schema has no separate product_variants.name column, so option name/value labels are the available persisted variant identity.",
+  "compatibility": "This is additive for variant_name. Existing name, product_variant_id, product_price_id, quantities, status, and timestamps remain in the response; name becomes more descriptive when options exist.",
+  "validation": "Add PostgreSQL-backed repository and HTTP response assertions for option-bearing and option-less variants, then run focused and broader backend validation without changing frontend files."
+}

@@ -16,8 +16,7 @@ import (
 
 func cleanupMembers(t *testing.T) {
 	t.Helper()
-	_, err := testPool.Exec(context.Background(), "DELETE FROM members WHERE id != '00000000-0000-0000-0000-000000000000'")
-	require.NoError(t, err)
+	require.NoError(t, testHarness.Reset(context.Background()))
 }
 
 func createTestMember(t *testing.T, repo *database.MemberRepositoryPGX) domain.Member {

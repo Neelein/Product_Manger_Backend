@@ -44,7 +44,8 @@ func (r *OrderRepositoryPGX) Create(ctx context.Context, order *model.Order, ite
 		err = tx.QueryRow(ctx, `SELECT pp.amount, jsonb_build_object('product_id',pd.product_id,'product_name',p.name,'price_id',pp.id,'label',pp.label,
 			'image_url',(SELECT '/media/images/products/' || pi.product_id::text || '/' || pi.filename FROM product_images pi WHERE pi.product_id=pd.product_id ORDER BY pi.created_at ASC, pi.id ASC LIMIT 1)), i.id
 			FROM product_prices pp JOIN product_details pd ON pd.id=pp.product_detail_id JOIN products p ON p.id=pd.product_id
-			JOIN inventories i ON i.product_price_id=pp.id WHERE pp.id=$1 FOR UPDATE`, items[i].ProductPriceID).
+			JOIN product_variants v ON v.product_price_id=pp.id JOIN inventories i ON i.product_variant_id=v.id
+			WHERE pp.id=$1 ORDER BY v.created_at, v.id, i.created_at, i.id LIMIT 1 FOR UPDATE OF i`, items[i].ProductPriceID).
 			Scan(&price, &snapshot, &inventoryID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return model.ErrPriceNotFound

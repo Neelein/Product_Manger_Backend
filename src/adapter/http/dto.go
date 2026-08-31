@@ -137,7 +137,6 @@ type ProductVariantListResponse struct {
 	Variants []ProductVariant `json:"variants"`
 }
 type CreateInventoryRequest struct {
-	ProductPriceID   string `json:"product_price_id"`
 	ProductVariantID string `json:"product_variant_id"`
 	Status           string `json:"status"`
 }

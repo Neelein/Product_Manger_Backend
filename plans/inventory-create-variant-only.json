@@ -1,0 +1,9 @@
+{
+  "title": "Remove legacy product-price inventory creation input",
+  "plan": [
+    "Accept only product_variant_id in POST /api/inventories and reject unknown legacy product_price_id fields.",
+    "Remove repository create fallback that resolves a variant from product_price_id; preserve derived product_price_id in inventory responses and existing price lookup reads.",
+    "Update API and PostgreSQL integration fixtures to create inventories through variants, then run focused and integration validation."
+  ],
+  "contract": "Inventory creation is variant-based. product_price_id is not accepted in create requests, while inventory response product_price_id remains a derived field."
+}

@@ -283,3 +283,20 @@ func TestDomainEntitiesHaveNoAdapterDependencies(t *testing.T) {
 		}
 	}
 }
+
+func TestIntegrationTestsDoNotContainLegacyDestructiveHelpers(t *testing.T) {
+	for _, file := range []string{
+		"src/test/api/handler_test.go",
+		"src/test/database/product_repo_test.go",
+	} {
+		text := source(t, file)
+		for _, helper := range []string{"dropTables", "runMigration", "ensureTestDatabase"} {
+			if strings.Contains(text, "func "+helper+"(") {
+				t.Fatalf("integration test file %s still defines legacy helper %s", file, helper)
+			}
+		}
+		if !strings.Contains(text, "backend/src/test/safeintegration") || !strings.Contains(text, "safeintegration.Open") {
+			t.Fatalf("integration test file %s does not use safeintegration harness", file)
+		}
+	}
+}

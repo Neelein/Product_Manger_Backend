@@ -15,6 +15,7 @@ import (
 	domain "backend/src/adapter/http"
 	database "backend/src/adapter/postgres"
 	"backend/src/adapter/session"
+	"backend/src/usecase"
 
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
@@ -69,6 +70,40 @@ func TestVariantHandlers_InventoryUsesVariantID(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	w = variantRequest(t, http.MethodPost, "/api/inventories", nil, domain.CreateInventoryRequest{ProductVariantID: "not-a-uuid"}, member, handler.CreateInventory)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestInventoryAPI_CreateIgnoresUnknownFields(t *testing.T) {
+	defer cleanupProducts(t)
+	repo := database.NewProductRepositoryPGX(testPool)
+	_, _, _, _, variant := createVariantFixture(t, repo)
+	memberRepo := database.NewMemberRepositoryPGX(testPool)
+	sessionCache := session.NewSessionCache(time.Hour)
+	cookie := authCookie(t, memberRepo, sessionCache, "admin")
+
+	r := mux.NewRouter()
+	api.RegisterInventoryRoutes(
+		r,
+		usecase.NewInventoryService(database.NewInventoryRepositoryPGX(testPool)),
+		usecase.NewMemberService(memberRepo, sessionCache),
+		usecase.NewSessionService(sessionCache),
+	)
+
+	legacyBody := []byte(`{"product_variant_id":"` + variant.ID + `","product_price_id":"legacy-price-id","status":"銷售中"}`)
+	w := doInventoryAPIRequest(t, r, http.MethodPost, "/api/inventories", legacyBody, cookie)
+	assert.Equal(t, http.StatusCreated, w.Code)
+	var legacyResponse domain.InventoryResponse
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&legacyResponse))
+	assert.Equal(t, variant.ID, legacyResponse.Inventory.ProductVariantID)
+}
+
+func doInventoryAPIRequest(t *testing.T, r *mux.Router, method, path string, body []byte, cookie *http.Cookie) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(method, path, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return w
 }
 
 func TestVariantHandlers_RejectCrossProductMutations(t *testing.T) {

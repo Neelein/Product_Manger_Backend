@@ -13,10 +13,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var inventoryVariantByPrice = map[string]string{}
+
 func cleanupInventory(t *testing.T) {
 	t.Helper()
-	_, err := testPool.Exec(context.Background(), "TRUNCATE TABLE inventory_items, inventories, product_prices, product_details, products CASCADE")
-	require.NoError(t, err)
+	require.NoError(t, testHarness.Reset(context.Background()))
 }
 
 func createTestPrice(t *testing.T, repo *database.ProductRepositoryPGX) (domain.ProductPrice, string) {
@@ -37,8 +38,19 @@ func createTestPrice(t *testing.T, repo *database.ProductRepositoryPGX) (domain.
 	}
 	err = repo.CreatePrice(context.Background(), &price)
 	require.NoError(t, err)
+	variants, err := repo.ListVariantsByDetailID(context.Background(), detail.ID)
+	require.NoError(t, err)
+	require.Len(t, variants, 1)
+	inventoryVariantByPrice[price.ID] = variants[0].ID
 
 	return price, product.Name
+}
+
+func inventoryForPrice(t *testing.T, price domain.ProductPrice) domain.Inventory {
+	t.Helper()
+	variantID, ok := inventoryVariantByPrice[price.ID]
+	require.True(t, ok)
+	return domain.Inventory{ProductVariantID: variantID}
 }
 
 func TestInventoryRepositoryPGX_CreateInventory(t *testing.T) {
@@ -48,10 +60,8 @@ func TestInventoryRepositoryPGX_CreateInventory(t *testing.T) {
 
 	price, _ := createTestPrice(t, repo)
 
-	inventory := domain.Inventory{
-		ProductPriceID: price.ID,
-		Status:         "銷售中",
-	}
+	inventory := inventoryForPrice(t, price)
+	inventory.Status = "銷售中"
 
 	err := invRepo.CreateInventory(context.Background(), &inventory)
 	assert.NoError(t, err)
@@ -67,10 +77,8 @@ func TestInventoryRepositoryPGX_GetInventoryByID(t *testing.T) {
 
 	price, productName := createTestPrice(t, repo)
 
-	created := domain.Inventory{
-		ProductPriceID: price.ID,
-		Status:         "銷售中",
-	}
+	created := inventoryForPrice(t, price)
+	created.Status = "銷售中"
 	err := invRepo.CreateInventory(context.Background(), &created)
 	require.NoError(t, err)
 
@@ -79,6 +87,7 @@ func TestInventoryRepositoryPGX_GetInventoryByID(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, created.ID, got.ID)
 		assert.Equal(t, productName+"-"+price.Label, got.Name)
+		assert.Empty(t, got.VariantName)
 		assert.Equal(t, 0, got.TotalQuantity)
 		assert.Equal(t, 0, got.SoldQuantity)
 		assert.Equal(t, "銷售中", got.Status)
@@ -97,9 +106,7 @@ func TestInventoryRepositoryPGX_GetInventoryByPriceID(t *testing.T) {
 
 	price, productName := createTestPrice(t, repo)
 
-	created := domain.Inventory{
-		ProductPriceID: price.ID,
-	}
+	created := inventoryForPrice(t, price)
 	err := invRepo.CreateInventory(context.Background(), &created)
 	require.NoError(t, err)
 
@@ -108,12 +115,52 @@ func TestInventoryRepositoryPGX_GetInventoryByPriceID(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, created.ID, got.ID)
 		assert.Equal(t, productName+"-"+price.Label, got.Name)
+		assert.Empty(t, got.VariantName)
 	})
 
 	t.Run("non-existent price id", func(t *testing.T) {
 		_, err := invRepo.GetInventoryByPriceID(context.Background(), "00000000-0000-0000-0000-000000000000")
 		assert.ErrorIs(t, err, domain.ErrInventoryNotFound)
 	})
+}
+
+func TestInventoryRepositoryPGX_IncludesVariantOptionName(t *testing.T) {
+	defer cleanupInventory(t)
+	repo := database.NewProductRepositoryPGX(testPool)
+	invRepo := database.NewInventoryRepositoryPGX(testPool)
+
+	price, productName := createTestPrice(t, repo)
+	option := domain.ProductOption{ProductDetailID: price.ProductDetailID, Name: "尺寸", Value: "大型"}
+	require.NoError(t, repo.CreateOption(context.Background(), &option))
+	variant := domain.ProductVariant{ProductDetailID: price.ProductDetailID, ProductPriceID: price.ID, OptionIDs: []string{option.ID}}
+	require.NoError(t, repo.CreateVariant(context.Background(), &variant))
+	inventory := domain.Inventory{ProductVariantID: variant.ID}
+	require.NoError(t, invRepo.CreateInventory(context.Background(), &inventory))
+	require.NoError(t, invRepo.CreateItem(context.Background(), &domain.InventoryItem{
+		InventoryID: inventory.ID,
+		ItemCode:    "ITEM-AVAILABLE",
+		Status:      "可用",
+	}))
+	require.NoError(t, invRepo.CreateItem(context.Background(), &domain.InventoryItem{
+		InventoryID: inventory.ID,
+		ItemCode:    "ITEM-SOLD",
+		Status:      "出售",
+	}))
+
+	got, err := invRepo.GetInventoryByID(context.Background(), inventory.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "尺寸: 大型", got.VariantName)
+	assert.Equal(t, productName+"-"+price.Label+"-尺寸: 大型", got.Name)
+	assert.Equal(t, 2, got.TotalQuantity)
+	assert.Equal(t, 1, got.SoldQuantity)
+
+	inventories, err := invRepo.ListInventories(context.Background())
+	require.NoError(t, err)
+	require.Len(t, inventories, 1)
+	assert.Equal(t, "尺寸: 大型", inventories[0].VariantName)
+	assert.Equal(t, productName+"-"+price.Label+"-尺寸: 大型", inventories[0].Name)
+	assert.Equal(t, 2, inventories[0].TotalQuantity)
+	assert.Equal(t, 1, inventories[0].SoldQuantity)
 }
 
 func TestInventoryRepositoryPGX_ListInventories(t *testing.T) {
@@ -131,8 +178,8 @@ func TestInventoryRepositoryPGX_ListInventories(t *testing.T) {
 		price1, _ := createTestPrice(t, repo)
 		price2, _ := createTestPrice(t, repo)
 
-		inv1 := domain.Inventory{ProductPriceID: price1.ID}
-		inv2 := domain.Inventory{ProductPriceID: price2.ID}
+		inv1 := inventoryForPrice(t, price1)
+		inv2 := inventoryForPrice(t, price2)
 		require.NoError(t, invRepo.CreateInventory(context.Background(), &inv1))
 		require.NoError(t, invRepo.CreateInventory(context.Background(), &inv2))
 
@@ -149,7 +196,7 @@ func TestInventoryRepositoryPGX_ListInventories_WithItems(t *testing.T) {
 
 	price, _ := createTestPrice(t, repo)
 
-	inv := domain.Inventory{ProductPriceID: price.ID}
+	inv := inventoryForPrice(t, price)
 	require.NoError(t, invRepo.CreateInventory(context.Background(), &inv))
 
 	for i := 1; i <= 5; i++ {
@@ -171,6 +218,34 @@ func TestInventoryRepositoryPGX_ListInventories_WithItems(t *testing.T) {
 	assert.Equal(t, 2, inventories[0].SoldQuantity)
 }
 
+func TestProductPricesRemainUniqueWhenVariantsSharePrice(t *testing.T) {
+	defer cleanupInventory(t)
+	repo := database.NewProductRepositoryPGX(testPool)
+	invRepo := database.NewInventoryRepositoryPGX(testPool)
+
+	price, _ := createTestPrice(t, repo)
+	first := inventoryForPrice(t, price)
+	require.NoError(t, invRepo.CreateInventory(context.Background(), &first))
+
+	option := domain.ProductOption{ProductDetailID: price.ProductDetailID, Name: "size", Value: "large"}
+	require.NoError(t, repo.CreateOption(context.Background(), &option))
+	secondVariant := domain.ProductVariant{
+		ProductDetailID: price.ProductDetailID,
+		ProductPriceID:  price.ID,
+		Status:          "active",
+		OptionIDs:       []string{option.ID},
+	}
+	require.NoError(t, repo.CreateVariant(context.Background(), &secondVariant))
+	second := domain.Inventory{ProductVariantID: secondVariant.ID}
+	require.NoError(t, invRepo.CreateInventory(context.Background(), &second))
+
+	prices, err := repo.GetPricesByDetailID(context.Background(), price.ProductDetailID)
+	require.NoError(t, err)
+	require.Len(t, prices, 1)
+	assert.Equal(t, price.ID, prices[0].ID)
+	assert.NotNil(t, prices[0].ProductVariantID)
+}
+
 func TestInventoryRepositoryPGX_UpdateInventory(t *testing.T) {
 	defer cleanupInventory(t)
 	repo := database.NewProductRepositoryPGX(testPool)
@@ -178,9 +253,7 @@ func TestInventoryRepositoryPGX_UpdateInventory(t *testing.T) {
 
 	price, _ := createTestPrice(t, repo)
 
-	created := domain.Inventory{
-		ProductPriceID: price.ID,
-	}
+	created := inventoryForPrice(t, price)
 	require.NoError(t, invRepo.CreateInventory(context.Background(), &created))
 	originalUpdatedAt := created.UpdatedAt
 
@@ -213,9 +286,7 @@ func TestInventoryRepositoryPGX_DeleteInventory(t *testing.T) {
 
 	price, _ := createTestPrice(t, repo)
 
-	created := domain.Inventory{
-		ProductPriceID: price.ID,
-	}
+	created := inventoryForPrice(t, price)
 	require.NoError(t, invRepo.CreateInventory(context.Background(), &created))
 
 	t.Run("delete existing", func(t *testing.T) {
@@ -238,7 +309,7 @@ func TestInventoryRepositoryPGX_CreateItem(t *testing.T) {
 	invRepo := database.NewInventoryRepositoryPGX(testPool)
 
 	price, _ := createTestPrice(t, repo)
-	inventory := domain.Inventory{ProductPriceID: price.ID}
+	inventory := inventoryForPrice(t, price)
 	require.NoError(t, invRepo.CreateInventory(context.Background(), &inventory))
 
 	item := domain.InventoryItem{
@@ -264,7 +335,7 @@ func TestInventoryRepositoryPGX_GetItemByID(t *testing.T) {
 	invRepo := database.NewInventoryRepositoryPGX(testPool)
 
 	price, _ := createTestPrice(t, repo)
-	inventory := domain.Inventory{ProductPriceID: price.ID}
+	inventory := inventoryForPrice(t, price)
 	require.NoError(t, invRepo.CreateInventory(context.Background(), &inventory))
 
 	created := domain.InventoryItem{
@@ -296,7 +367,7 @@ func TestInventoryRepositoryPGX_ListItemsByInventoryID(t *testing.T) {
 	invRepo := database.NewInventoryRepositoryPGX(testPool)
 
 	price, _ := createTestPrice(t, repo)
-	inventory := domain.Inventory{ProductPriceID: price.ID}
+	inventory := inventoryForPrice(t, price)
 	require.NoError(t, invRepo.CreateInventory(context.Background(), &inventory))
 
 	t.Run("empty list", func(t *testing.T) {
@@ -323,7 +394,7 @@ func TestInventoryRepositoryPGX_UpdateItem(t *testing.T) {
 	invRepo := database.NewInventoryRepositoryPGX(testPool)
 
 	price, _ := createTestPrice(t, repo)
-	inventory := domain.Inventory{ProductPriceID: price.ID}
+	inventory := inventoryForPrice(t, price)
 	require.NoError(t, invRepo.CreateInventory(context.Background(), &inventory))
 
 	created := domain.InventoryItem{
@@ -365,7 +436,7 @@ func TestInventoryRepositoryPGX_DeleteItem(t *testing.T) {
 	invRepo := database.NewInventoryRepositoryPGX(testPool)
 
 	price, _ := createTestPrice(t, repo)
-	inventory := domain.Inventory{ProductPriceID: price.ID}
+	inventory := inventoryForPrice(t, price)
 	require.NoError(t, invRepo.CreateInventory(context.Background(), &inventory))
 
 	created := domain.InventoryItem{
