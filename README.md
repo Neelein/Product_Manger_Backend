@@ -53,6 +53,10 @@ make test
 DATABASE_URL=postgres://root:root123@localhost:5432/productdb?sslmode=disable make test-integration-productdb
 ```
 
+CI provisions PostgreSQL with the `productdb` database and passes the same
+`DATABASE_URL` explicitly. The CI credentials are disposable service-container
+credentials, not application or repository secrets.
+
 Integration tests do not use `TEST_DATABASE_URL`. Each run creates a random schema,
 configures every test pool connection with that schema first in `search_path`, and
 drops only that schema during cleanup. The public `root@gmail.com` member is checked

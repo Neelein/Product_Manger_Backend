@@ -300,3 +300,16 @@ func TestIntegrationTestsDoNotContainLegacyDestructiveHelpers(t *testing.T) {
 		}
 	}
 }
+
+func TestIntegrationWorkflowTargetsProductDBExplicitly(t *testing.T) {
+	workflow := source(t, ".github/workflows/cicd.yml")
+	if !strings.Contains(workflow, "POSTGRES_DB: productdb") {
+		t.Fatal("integration service must provision the productdb database")
+	}
+	if !strings.Contains(workflow, "DATABASE_URL: postgres://root:root123@localhost:5432/productdb?sslmode=disable") {
+		t.Fatal("integration job must explicitly provide DATABASE_URL targeting productdb")
+	}
+	if strings.Contains(workflow, "TEST_DATABASE_URL") {
+		t.Fatal("integration workflow must not use the removed TEST_DATABASE_URL")
+	}
+}
