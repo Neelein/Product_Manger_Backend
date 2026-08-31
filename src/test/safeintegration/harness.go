@@ -21,6 +21,8 @@ type Harness struct {
 	sentinel  string
 }
 
+const isolatedRootID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+
 func Open(ctx context.Context, databaseURL string) (*Harness, error) {
 	u, err := pgxpool.ParseConfig(databaseURL)
 	if err != nil {
@@ -85,6 +87,11 @@ func (h *Harness) migrate(ctx context.Context) error {
 		if _, err = h.Pool.Exec(ctx, string(data)); err != nil {
 			return fmt.Errorf("migration %s: %w", entry.Name(), err)
 		}
+	}
+	if _, err := h.Pool.Exec(ctx, `
+		INSERT INTO members (id, email, password, name, member_type, permission)
+		VALUES ($1, 'root@gmail.com', '$2a$10$8cvP4Nv3LdR3J303AQ7NIOSnb1rQaNU/iyo65Gcv/oFSTyP03UodK', 'root', 'employee', 'admin')`, isolatedRootID); err != nil {
+		return fmt.Errorf("seed isolated root member: %w", err)
 	}
 	return nil
 }

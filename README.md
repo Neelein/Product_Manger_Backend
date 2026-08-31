@@ -52,7 +52,7 @@ DATABASE_URL=postgres://root:root123@localhost:5432/productdb?sslmode=disable ma
 ```
 
 CI provisions PostgreSQL with the `productdb` database, runs `go run . migrate`
-before integration tests, and passes the same `DATABASE_URL` explicitly. The CI
+and then `go run ./src/test/seed_integration` before integration tests, and passes the same `DATABASE_URL` explicitly. The CI
 credentials are disposable service-container credentials, not application or
 repository secrets.
 
@@ -77,7 +77,8 @@ DATABASE_URL=postgres://root:root123@localhost:5432/productdb_storefront_e2e?ssl
 ```
 
 The storefront E2E harness should invoke the command from `backend/` exactly as
-above, then start the API against the same `DATABASE_URL`.
+above, after applying migrations and creating the root member, then start the API
+against the same `DATABASE_URL`.
 
 ### Checkout order contract
 

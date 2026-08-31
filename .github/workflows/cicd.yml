@@ -43,6 +43,10 @@ jobs:
         run: go run . migrate
         env:
           DATABASE_URL: postgres://root:root123@localhost:5432/productdb?sslmode=disable
+      - name: Seed disposable integration members
+        run: go run ./src/test/seed_integration
+        env:
+          DATABASE_URL: postgres://root:root123@localhost:5432/productdb?sslmode=disable
       - run: go test -tags=integration -count=1 -p=1 -v ./src/test/api ./src/test/database
         env:
           DATABASE_URL: postgres://root:root123@localhost:5432/productdb?sslmode=disable

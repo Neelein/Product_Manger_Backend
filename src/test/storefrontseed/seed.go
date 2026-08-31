@@ -17,6 +17,8 @@ const (
 	CategoryID = "55555555-5555-5555-5555-555555555555"
 )
 
+const RootEmail = "root@gmail.com"
+
 // Seed upserts the deterministic data used by the storefront browser E2E.
 // It intentionally does not remove any other data from the database.
 func Seed(ctx context.Context, pool *pgxpool.Pool) error {
@@ -25,6 +27,10 @@ func Seed(ctx context.Context, pool *pgxpool.Pool) error {
 		return fmt.Errorf("begin storefront seed transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
+	var rootID string
+	if err := tx.QueryRow(ctx, `SELECT id::text FROM members WHERE email = $1`, RootEmail).Scan(&rootID); err != nil {
+		return fmt.Errorf("find storefront seed member: %w", err)
+	}
 
 	statements := []struct {
 		query string
@@ -37,10 +43,10 @@ func Seed(ctx context.Context, pool *pgxpool.Pool) error {
 		},
 		{
 			`INSERT INTO products (id, type, name, status, category_id, member_id)
-			 VALUES ($1, 'product', $2, 'active', $3, '00000000-0000-0000-0000-000000000000')
+			 VALUES ($1, 'product', $2, 'active', $3, $4)
 			 ON CONFLICT (id) DO UPDATE SET
 			 name = EXCLUDED.name, status = EXCLUDED.status, category_id = EXCLUDED.category_id`,
-			[]any{ProductID, "Integration Product", CategoryID},
+			[]any{ProductID, "Integration Product", CategoryID, rootID},
 		},
 		{
 			`INSERT INTO product_details (id, product_id, introduction, usage_instructions, return_policy)

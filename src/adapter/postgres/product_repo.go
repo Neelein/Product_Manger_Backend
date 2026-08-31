@@ -29,9 +29,9 @@ func (r *ProductRepositoryPGX) Create(
 		status = "active"
 	}
 
-	memberID := product.CreatedBy
-	if memberID == "" {
-		memberID = "00000000-0000-0000-0000-000000000000"
+	var memberID *string
+	if product.CreatedBy != "" {
+		memberID = &product.CreatedBy
 	}
 
 	var categoryID *string

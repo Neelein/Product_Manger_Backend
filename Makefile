@@ -1,4 +1,4 @@
-.PHONY: db db-stop db-rm server server-stop test test-integration test-integration-productdb seed-storefront-e2e
+.PHONY: db db-stop db-rm server server-stop test test-integration test-integration-productdb seed-storefront-e2e seed-integration
 
 db:
 	docker compose up -d db
@@ -26,3 +26,6 @@ test-integration-productdb:
 
 seed-storefront-e2e:
 	go run ./src/test/seed_storefront
+
+seed-integration:
+	go run ./src/test/seed_integration

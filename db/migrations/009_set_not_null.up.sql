@@ -2,23 +2,10 @@
 -- Migration 011: Make all nullable columns NOT NULL with defaults
 -- ============================================================
 
--- Create a system member for the default UUID on member_id
-INSERT INTO members (id, email, password, name)
-VALUES ('00000000-0000-0000-0000-000000000000', 'system@internal', '', 'System')
-ON CONFLICT (id) DO NOTHING;
-
 -- products.category
 UPDATE products SET category = '' WHERE category IS NULL;
 ALTER TABLE products ALTER COLUMN category SET DEFAULT '';
 ALTER TABLE products ALTER COLUMN category SET NOT NULL;
-
--- products.member_id
-UPDATE products SET member_id = '00000000-0000-0000-0000-000000000000' WHERE member_id IS NULL;
-ALTER TABLE products DROP CONSTRAINT products_member_id_fkey;
-ALTER TABLE products ALTER COLUMN member_id SET DEFAULT '00000000-0000-0000-0000-000000000000';
-ALTER TABLE products ALTER COLUMN member_id SET NOT NULL;
-ALTER TABLE products ADD CONSTRAINT products_member_id_fkey
-    FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE SET DEFAULT;
 
 -- product_details.introduction
 UPDATE product_details SET introduction = '' WHERE introduction IS NULL;

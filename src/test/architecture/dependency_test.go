@@ -314,8 +314,19 @@ func TestIntegrationWorkflowTargetsProductDBExplicitly(t *testing.T) {
 	}
 	migration := "run: go run . migrate"
 	migrationIndex := strings.Index(workflow, migration)
+	seed := "run: go run ./src/test/seed_integration"
+	seedIndex := strings.Index(workflow, seed)
 	testIndex := strings.Index(workflow, "go test -tags=integration")
-	if migrationIndex == -1 || testIndex == -1 || migrationIndex > testIndex {
-		t.Fatal("integration workflow must initialize productdb with the supported migration command before tests")
+	if migrationIndex == -1 || seedIndex == -1 || testIndex == -1 || migrationIndex > seedIndex || seedIndex > testIndex {
+		t.Fatal("integration workflow must migrate and seed productdb before tests")
+	}
+}
+
+func TestProductionMigrationsDoNotSeedMembersOrZeroMemberIDs(t *testing.T) {
+	for _, file := range []string{"db/migrations/003_add_member_id_to_products.up.sql", "db/migrations/009_set_not_null.up.sql", "db/migrations/014_insert_admin_member.up.sql"} {
+		text := source(t, file)
+		if strings.Contains(text, "INSERT INTO members") || strings.Contains(text, "00000000-0000-0000-0000-000000000000") {
+			t.Fatalf("production migration %s contains a test member fixture", file)
+		}
 	}
 }

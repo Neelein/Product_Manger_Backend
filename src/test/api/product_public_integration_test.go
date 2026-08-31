@@ -49,6 +49,8 @@ func seedPublicProductFixture(t *testing.T, pool *pgxpool.Pool) publicProductFix
 		publicFixtureCategoryID, "Integration Category")
 	require.NoError(t, err)
 
+	var rootID string
+	require.NoError(t, tx.QueryRow(ctx, `SELECT id::text FROM members WHERE email = 'root@gmail.com'`).Scan(&rootID))
 	_, err = tx.Exec(ctx, `
 		INSERT INTO products (id, type, name, status, category_id, member_id)
 		VALUES ($1, 'product', $2, 'active', $3, $4)
@@ -59,7 +61,7 @@ func seedPublicProductFixture(t *testing.T, pool *pgxpool.Pool) publicProductFix
 		publicFixtureProductID,
 		"Integration Product",
 		publicFixtureCategoryID,
-		"00000000-0000-0000-0000-000000000000")
+		rootID)
 	require.NoError(t, err)
 
 	_, err = tx.Exec(ctx, `
