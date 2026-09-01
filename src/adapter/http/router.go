@@ -69,6 +69,7 @@ func RegisterMemberRoutes(r *mux.Router, memberService usecase.MemberService, se
 	r.HandleFunc("/api/members/logout", h.LogoutMember).Methods("POST")
 	r.Handle("/api/members/me", auth(http.HandlerFunc(h.GetCurrentMember))).Methods("GET")
 	r.Handle("/api/members/update", auth(http.HandlerFunc(h.UpdateMember))).Methods("POST")
+	r.Handle("/api/members/password", auth(http.HandlerFunc(h.ChangePassword))).Methods("POST")
 	r.Handle("/api/members/{memberId}/permission", auth(http.HandlerFunc(h.UpdateMemberPermission))).Methods("POST")
 }
 

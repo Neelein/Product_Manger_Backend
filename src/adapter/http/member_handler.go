@@ -178,6 +178,38 @@ func (h *MemberHandler) UpdateMember(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *MemberHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	member := memberFromRequest(r)
+	if member == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req ChangePasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.NewPassword != req.ConfirmNewPassword {
+		writeError(w, http.StatusBadRequest, usecase.ErrPasswordConfirmation.Error())
+		return
+	}
+	if err := h.memberService.ChangePassword(r.Context(), member.ID, req.CurrentPassword, req.NewPassword); err != nil {
+		switch {
+		case errors.Is(err, usecase.ErrInvalidPasswordChange):
+			writeError(w, http.StatusBadRequest, err.Error())
+		case errors.Is(err, model.ErrInvalidCredentials):
+			writeError(w, http.StatusUnauthorized, "invalid current password")
+		default:
+			writeError(w, http.StatusInternalServerError, err.Error())
+		}
+		return
+	}
+
+	http.SetCookie(w, clearSessionCookie(r))
+	writeJSON(w, http.StatusOK, map[string]string{"message": "password updated"})
+}
+
 func (h *MemberHandler) GetCurrentMember(w http.ResponseWriter, r *http.Request) {
 	member := memberFromRequest(r)
 	if member == nil {
