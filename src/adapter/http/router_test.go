@@ -26,3 +26,13 @@ func TestAnnouncementMediaServesJPEGWithImageContentType(t *testing.T) {
 	require.Equal(t, http.StatusOK, recorder.Code)
 	require.Equal(t, "image/jpeg", recorder.Header().Get("Content-Type"))
 }
+
+func TestMemberPasswordRouteRequiresAuthentication(t *testing.T) {
+	router := mux.NewRouter()
+	RegisterMemberRoutes(router, nil, nil, nil)
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/members/password", nil))
+
+	require.Equal(t, http.StatusUnauthorized, recorder.Code)
+}

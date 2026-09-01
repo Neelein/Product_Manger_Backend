@@ -408,3 +408,122 @@ func TestHandler_Login_BadUser(t *testing.T) {
 	w := executeRequest(http.MethodPost, "/api/members/login", loginBody, handler.LoginMember)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
+
+func TestHandler_ChangePassword(t *testing.T) {
+	defer cleanupMembers(t)
+	_, sessionCache, handler := setupMemberHandler()
+	const email = "change-password@example.com"
+	const currentPassword = "currentpw"
+
+	w := executeRegister(handler, email, currentPassword, "Password User", seedCode(t, "password-change"))
+	require.Equal(t, http.StatusCreated, w.Code)
+	w = executeRequest(http.MethodPost, "/api/members/login", registerLoginBody(email, currentPassword), handler.LoginMember)
+	require.Equal(t, http.StatusOK, w.Code)
+	sessionCookie := w.Result().Cookies()[0]
+	var loginResponse domain.LoginResponse
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&loginResponse))
+
+	change := func(current, next, confirm string) *httptest.ResponseRecorder {
+		body, err := json.Marshal(domain.ChangePasswordRequest{
+			CurrentPassword: current, NewPassword: next, ConfirmNewPassword: confirm,
+		})
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/members/password", bytes.NewReader(body))
+		req.AddCookie(sessionCookie)
+		req = req.WithContext(api.ContextWithMember(req.Context(), &domain.Member{ID: loginResponse.Member.ID}))
+		response := httptest.NewRecorder()
+		handler.ChangePassword(response, req)
+		return response
+	}
+
+	tests := []struct {
+		name       string
+		current    string
+		next       string
+		confirm    string
+		wantStatus int
+		wantError  string
+	}{
+		{name: "wrong current password", current: "wrongpw", next: "newpass1", confirm: "newpass1", wantStatus: http.StatusUnauthorized, wantError: "invalid current password"},
+		{name: "confirmation mismatch", current: currentPassword, next: "newpass1", confirm: "newpass2", wantStatus: http.StatusBadRequest, wantError: "new passwords do not match"},
+		{name: "seven runes", current: currentPassword, next: "newpw12", confirm: "newpw12", wantStatus: http.StatusBadRequest, wantError: "new password must be 8-16 characters"},
+		{name: "eight runes", current: currentPassword, next: "newpass1", confirm: "newpass1", wantStatus: http.StatusOK},
+	}
+	var successResponse *httptest.ResponseRecorder
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			response := change(tt.current, tt.next, tt.confirm)
+			assert.Equal(t, tt.wantStatus, response.Code)
+			if tt.wantStatus == http.StatusOK {
+				successResponse = response
+			}
+			if tt.wantError != "" {
+				var errorResponse domain.ErrorResponse
+				require.NoError(t, json.NewDecoder(response.Body).Decode(&errorResponse))
+				assert.Equal(t, tt.wantError, errorResponse.Error)
+			}
+		})
+	}
+	var successBody map[string]string
+	require.NoError(t, json.NewDecoder(successResponse.Body).Decode(&successBody))
+	assert.Equal(t, "password updated", successBody["message"])
+	assert.Equal(t, "", successResponse.Result().Cookies()[0].Value)
+
+	// The successful boundary case invalidates the session and changes login credentials.
+	assert.Nil(t, mustSession(t, sessionCache, sessionCookie.Value))
+	oldLogin := executeRequest(http.MethodPost, "/api/members/login", registerLoginBody(email, currentPassword), handler.LoginMember)
+	assert.Equal(t, http.StatusUnauthorized, oldLogin.Code)
+	newLogin := executeRequest(http.MethodPost, "/api/members/login", registerLoginBody(email, "newpass1"), handler.LoginMember)
+	assert.Equal(t, http.StatusOK, newLogin.Code)
+}
+
+func TestHandler_ChangePassword_LengthBoundaries(t *testing.T) {
+	defer cleanupMembers(t)
+	_, _, handler := setupMemberHandler()
+	tests := []struct {
+		name       string
+		password   string
+		wantStatus int
+	}{
+		{name: "sixteen runes", password: "newpassword12345", wantStatus: http.StatusOK},
+		{name: "seventeen runes", password: "newpassword123456", wantStatus: http.StatusBadRequest},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			password := tt.password
+			email := password + "@example.com"
+			w := executeRegister(handler, email, "currentpw", "Password User", seedCode(t, password))
+			require.Equal(t, http.StatusCreated, w.Code)
+			w = executeRequest(http.MethodPost, "/api/members/login", registerLoginBody(email, "currentpw"), handler.LoginMember)
+			require.Equal(t, http.StatusOK, w.Code)
+			var loginResponse domain.LoginResponse
+			require.NoError(t, json.NewDecoder(w.Body).Decode(&loginResponse))
+			body, err := json.Marshal(domain.ChangePasswordRequest{CurrentPassword: "currentpw", NewPassword: password, ConfirmNewPassword: password})
+			require.NoError(t, err)
+			req := httptest.NewRequest(http.MethodPost, "/api/members/password", bytes.NewReader(body))
+			req = req.WithContext(api.ContextWithMember(req.Context(), &domain.Member{ID: loginResponse.Member.ID}))
+			response := httptest.NewRecorder()
+			handler.ChangePassword(response, req)
+			assert.Equal(t, tt.wantStatus, response.Code)
+		})
+	}
+}
+
+func TestHandler_ChangePassword_Unauthorized(t *testing.T) {
+	defer cleanupMembers(t)
+	_, _, handler := setupMemberHandler()
+	response := executeRequest(http.MethodPost, "/api/members/password", nil, handler.ChangePassword)
+	assert.Equal(t, http.StatusUnauthorized, response.Code)
+}
+
+func registerLoginBody(email, password string) []byte {
+	body, _ := json.Marshal(domain.LoginRequest{Email: email, Password: password})
+	return body
+}
+
+func mustSession(t *testing.T, cache *session.SessionCache, key string) *domain.Session {
+	t.Helper()
+	value, err := cache.GetByKey(context.Background(), key)
+	require.NoError(t, err)
+	return value
+}

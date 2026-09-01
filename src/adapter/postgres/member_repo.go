@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	domain "backend/src/domain/model"
 
@@ -80,6 +81,18 @@ func (r *MemberRepositoryPGX) Update(ctx context.Context, member *domain.Member)
 			return domain.ErrEmailAlreadyExists
 		}
 		return fmt.Errorf("updating member: %w", err)
+	}
+	return nil
+}
+
+func (r *MemberRepositoryPGX) UpdatePassword(ctx context.Context, memberID, passwordHash string) error {
+	var updatedAt time.Time
+	err := r.pool.QueryRow(ctx, "SELECT * FROM update_member_password($1, $2)", memberID, passwordHash).Scan(&updatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.ErrMemberNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("updating member password: %w", err)
 	}
 	return nil
 }

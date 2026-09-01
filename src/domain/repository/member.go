@@ -11,6 +11,7 @@ type Member interface {
 	GetByEmail(context.Context, string) (*model.Member, error)
 	GetByID(context.Context, string) (*model.Member, error)
 	Update(context.Context, *model.Member) error
+	UpdatePassword(context.Context, string, string) error
 }
 
 type MemberPermission interface {

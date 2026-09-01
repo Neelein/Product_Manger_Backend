@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -82,6 +83,7 @@ type MemberService interface {
 	GetByID(context.Context, string) (*model.Member, error)
 	Update(context.Context, *model.Member) error
 	UpdatePermission(context.Context, string, string, string) error
+	ChangePassword(context.Context, string, string, string) error
 }
 
 type SessionService interface {
@@ -296,8 +298,9 @@ func (s *inventoryService) CreateInventory(ctx context.Context, inventory *model
 
 type memberService struct {
 	repository.Member
-	sessions repository.Session
-	codes    repository.RegistrationCode
+	sessions   repository.Session
+	sessionOps repository.SessionOperations
+	codes      repository.RegistrationCode
 }
 
 func NewMemberService(repo repository.Member, dependencies ...interface{}) MemberService {
@@ -306,11 +309,42 @@ func NewMemberService(repo repository.Member, dependencies ...interface{}) Membe
 		switch value := dependency.(type) {
 		case repository.Session:
 			service.sessions = value
+			if operations, ok := value.(repository.SessionOperations); ok {
+				service.sessionOps = operations
+			}
 		case repository.RegistrationCode:
 			service.codes = value
 		}
 	}
 	return service
+}
+
+func (s *memberService) ChangePassword(ctx context.Context, memberID, currentPassword, newPassword string) error {
+	passwordLength := utf8.RuneCountInString(newPassword)
+	if passwordLength < 8 || passwordLength > 16 {
+		return ErrInvalidPasswordChange
+	}
+	if currentPassword == "" || newPassword == "" {
+		return model.ErrInvalidCredentials
+	}
+	if s.sessionOps == nil {
+		return fmt.Errorf("session operations are not configured")
+	}
+	member, err := s.Member.GetByID(ctx, memberID)
+	if err != nil || member == nil || bcrypt.CompareHashAndPassword([]byte(member.Password), []byte(currentPassword)) != nil {
+		return model.ErrInvalidCredentials
+	}
+	if currentPassword == newPassword {
+		return ErrInvalidPasswordChange
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	if err := s.Member.UpdatePassword(ctx, memberID, string(hash)); err != nil {
+		return err
+	}
+	return s.sessionOps.DeleteByMemberID(ctx, memberID)
 }
 func (s *memberService) RegisterApplication(ctx context.Context, member *model.Member, password, code string) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
