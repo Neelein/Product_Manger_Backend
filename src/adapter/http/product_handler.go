@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"backend/src/domain/model"
 	"backend/src/usecase"
 
 	"github.com/google/uuid"
@@ -355,6 +356,22 @@ func (h *ProductHandler) ListImages(w http.ResponseWriter, r *http.Request) {
 		images[i].URL = "/media/images/products/" + images[i].ProductID + "/" + images[i].Filename
 	}
 	writeJSON(w, http.StatusOK, ProductImageListResponse{Images: images})
+}
+
+func (h *ProductHandler) DeleteImage(w http.ResponseWriter, r *http.Request) {
+	if MemberFromContext(r.Context()) == nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if err := h.service.DeleteImage(r.Context(), mux.Vars(r)["productId"], mux.Vars(r)["imageId"]); err != nil {
+		if errors.Is(err, model.ErrProductImageNotFound) {
+			writeError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "could not delete image")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "product image deleted"})
 }
 
 func (h *ProductHandler) GetProduct(

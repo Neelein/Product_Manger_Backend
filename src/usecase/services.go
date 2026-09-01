@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/mail"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -51,6 +52,7 @@ type ProductService interface {
 	DeleteVariant(context.Context, string) error
 	UploadImages(context.Context, string, []UploadInput) ([]model.ProductImage, error)
 	ListImages(context.Context, string) ([]model.ProductImage, error)
+	DeleteImage(context.Context, string, string) error
 }
 
 type InventoryService interface {
@@ -224,6 +226,25 @@ func (s *productService) UploadImages(ctx context.Context, productID string, upl
 		images = append(images, image)
 	}
 	return images, nil
+}
+
+func (s *productService) DeleteImage(ctx context.Context, productID, imageID string) error {
+	deleter, ok := s.storage.(FileDeleter)
+	if !ok {
+		return fmt.Errorf("file storage is not configured")
+	}
+	if productID == "" || filepath.Base(productID) != productID {
+		return fmt.Errorf("invalid product image path")
+	}
+	image, err := s.Product.DeleteImage(ctx, productID, imageID)
+	if err != nil {
+		return err
+	}
+	if image == nil || image.ProductID != productID || image.Filename == "" || filepath.Base(image.Filename) != image.Filename {
+		return fmt.Errorf("invalid product image path")
+	}
+	path := filepath.Join(os.Getenv("MEDIA_ROOT"), "images/products", productID, image.Filename)
+	return deleter.Delete(path)
 }
 func (s *productService) GetDetailForRoute(ctx context.Context, productID, detailID string) (*model.ProductDetail, error) {
 	detail, err := s.Product.GetDetailByProductID(ctx, productID)

@@ -475,3 +475,16 @@ func (r *ProductRepositoryPGX) ListImages(ctx context.Context, productID string)
 	}
 	return images, nil
 }
+
+func (r *ProductRepositoryPGX) DeleteImage(ctx context.Context, productID, imageID string) (*domain.ProductImage, error) {
+	var image domain.ProductImage
+	err := r.pool.QueryRow(ctx, "SELECT * FROM delete_product_image($1, $2)", productID, imageID).
+		Scan(&image.ID, &image.ProductID, &image.Filename, &image.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, domain.ErrProductImageNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("deleting product image: %w", err)
+	}
+	return &image, nil
+}

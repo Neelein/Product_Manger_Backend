@@ -20,6 +20,7 @@ func RegisterProductRoutes(r *mux.Router, service usecase.ProductService, member
 	r.HandleFunc("/api/products/{productId}", h.GetProduct).Methods("GET")
 	r.HandleFunc("/api/products/{productId}/images", h.ListImages).Methods("GET")
 	r.Handle("/api/products/{productId}/images", employeeAuth(http.HandlerFunc(h.UploadImages))).Methods("POST")
+	r.Handle("/api/products/{productId}/images/{imageId}/delete", employeeAuth(http.HandlerFunc(h.DeleteImage))).Methods("POST")
 	r.Handle("/api/products/{productId}/update", employeeAuth(http.HandlerFunc(h.UpdateProduct))).Methods("POST")
 	r.Handle("/api/products/{productId}/delete", employeeAuth(http.HandlerFunc(h.DeleteProduct))).Methods("POST")
 	r.HandleFunc("/api/products/{productId}/detail", h.GetDetail).Methods("GET")

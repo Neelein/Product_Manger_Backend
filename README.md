@@ -66,7 +66,7 @@ reported for manual review rather than resetting productdb.
 ### Storefront browser E2E fixture
 
 The repeatable fixture command reads `DATABASE_URL` and defaults to the dedicated
-database `productdb_storefront_e2e`. Apply migrations 001 through 022 first, and
+database `productdb_storefront_e2e`. Apply migrations 001 through 023 first, and
 create that database if it does not exist. The command only upserts the fixed
 category, product, detail, and two prices; it does not truncate other data. It
 also verifies the resulting rows before exiting successfully.
@@ -100,7 +100,7 @@ src/
 ├── database/     # pgx repository implementations
 └── test/         # Unit + integration tests
 db/
-└── migrations/   # SQL migrations (001-022, .up.sql)
+└── migrations/   # SQL migrations (001-023, .up.sql)
 ```
 
 ### Design Patterns
@@ -240,3 +240,4 @@ responses as a value derived through the variant relationship.
 | 020 | `020_create_product_images.up.sql` | product image metadata and functions |
 | 021 | `021_link_price_inventory_by_variant.up.sql` | Link inventory and price lookups through product variants |
 | 022 | `022_repair_inventory_function_contract.up.sql` | Repair inventory function return contracts |
+| 023 | `023_delete_product_image.up.sql` | Delete one product image and return its metadata |

@@ -17,6 +17,7 @@ func TestAdministrativeRoutesUseEmployeeBoundary(t *testing.T) {
 		"h.CreateAnnouncement", "h.UpdateAnnouncement", "h.DeleteAnnouncement",
 		"h.CreateEvent", "h.UpdateEvent", "h.DeleteEvent", "h.AddViewer", "h.RemoveViewer",
 		"h.CreateRoom", "h.UpdateRoom", "h.DeleteRoom", "h.AddMembers", "h.RemoveMember", "h.SendMessage",
+		"h.DeleteImage",
 	} {
 		if !strings.Contains(s, "employeeAuth(http.HandlerFunc("+route+"))") {
 			t.Errorf("%s is not protected by employee authorization", route)
