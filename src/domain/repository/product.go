@@ -31,6 +31,7 @@ type Product interface {
 	DeleteVariant(context.Context, string) error
 	CreateImage(context.Context, *model.ProductImage) error
 	ListImages(context.Context, string) ([]model.ProductImage, error)
+	DeleteImage(context.Context, string, string) (*model.ProductImage, error)
 }
 
 type ProductVariants interface {

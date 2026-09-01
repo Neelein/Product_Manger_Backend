@@ -21,3 +21,20 @@ func TestLocalFileStorageSavesNestedFile(t *testing.T) {
 		t.Fatalf("content = %q", data)
 	}
 }
+
+func TestLocalFileStorageDeletesFileAndTreatsMissingFileAsSuccess(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "file.txt")
+	if err := (LocalFileStorage{}).Save(path, strings.NewReader("content")); err != nil {
+		t.Fatal(err)
+	}
+	if err := (LocalFileStorage{}).Delete(path); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("expected deleted file, stat error = %v", err)
+	}
+	if err := (LocalFileStorage{}).Delete(path); err != nil {
+		t.Fatal(err)
+	}
+}

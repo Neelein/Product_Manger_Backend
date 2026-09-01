@@ -1,0 +1,8 @@
+{
+  "date": "2026-09-01",
+  "decision": "Implement POST /api/products/{productId}/images/{imageId}/delete behind the existing employee authorization boundary. The repository deletes the product-scoped database row and returns its filename before the service removes the corresponding media file using a storage Delete operation.",
+  "rationale": "Product editing routes use POST action-style delete paths and RequireEmployee. ProductImage fields ID, ProductID, Filename, and CreatedAt remain because they are used by persistence, API serialization, media-path construction, and order image snapshots; no field is removed.",
+  "consistency": "Database deletion precedes filesystem deletion as requested. The service validates the returned product and filename and confines deletion to MEDIA_ROOT/images/products/{productId}; a storage failure is surfaced rather than reported as success, with the unavoidable filesystem/database atomicity limitation documented.",
+  "breaking_change": "No existing endpoint or response is removed. This adds one employee-only endpoint and one repository/migration function. Existing ProductImage JSON remains unchanged.",
+  "unrelated_changes": "Announcement changes in the worktree are out of scope and are not modified."
+}

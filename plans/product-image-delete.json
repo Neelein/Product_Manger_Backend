@@ -1,0 +1,23 @@
+{
+  "topic": "product-image-delete",
+  "date": "2026-09-01",
+  "scope": "Add employee-authorized deletion of one product image without changing announcement work.",
+  "steps": [
+    "Extend the product repository, service, and local file-storage ports to delete an image by product and image ID.",
+    "Delete and return the database row first, then remove the validated media path; map missing rows to 404 and rely on RequireEmployee for 401/403.",
+    "Register POST /api/products/{productId}/images/{imageId}/delete with the existing message response convention.",
+    "Add service, handler, router, storage, and migration contract tests, then run focused and broader backend tests without destructive database operations."
+  ],
+  "contract": {
+    "method": "POST",
+    "path": "/api/products/{productId}/images/{imageId}/delete",
+    "authorization": "authenticated employee",
+    "success": "200 {\"message\":\"product image deleted\"}",
+    "errors": {
+      "401": "unauthorized",
+      "403": "forbidden",
+      "404": "product image not found",
+      "500": "storage or database failure"
+    }
+  }
+}

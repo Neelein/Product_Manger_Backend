@@ -20,6 +20,14 @@ func (LocalFileStorage) Save(path string, src io.Reader) error {
 	return Save(path, src)
 }
 
+func (LocalFileStorage) Delete(path string) error {
+	err := os.Remove(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	return err
+}
+
 func Save(path string, src io.Reader) error {
 	f, err := os.Create(path)
 	if err != nil {
