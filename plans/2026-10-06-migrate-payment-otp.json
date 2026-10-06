@@ -1,0 +1,9 @@
+{
+  "topic": "migrate-command-payment-otp",
+  "scope": "Backend command/config initialization and CI migration regression coverage",
+  "steps": [
+    "Confirm that main currently loads the runtime configuration before dispatching migrate, while the CI migration step provides only DATABASE_URL.",
+    "Dispatch the migrate command before runtime configuration loading and retain PAYMENT_OTP validation for normal server startup.",
+    "Add focused command/config regression tests, inspect affected data structures and contracts for unused fields, run gofmt and backend tests, and report database-dependent limitations."
+  ]
+}

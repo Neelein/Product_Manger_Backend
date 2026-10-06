@@ -48,7 +48,21 @@ func runMigrations(databaseURL string) error {
 	return nil
 }
 
+func runMigrationCommand(getenv func(string) string, migrate func(string) error) error {
+	databaseURL := strings.TrimSpace(getenv("DATABASE_URL"))
+	if databaseURL == "" {
+		return fmt.Errorf("DATABASE_URL is not set")
+	}
+	return migrate(databaseURL)
+}
+
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "migrate" {
+		if err := runMigrationCommand(os.Getenv, runMigrations); err != nil {
+			log.Fatalf("migration failed: %v", err)
+		}
+		return
+	}
 	appConfig, err := config.Load(os.Getenv)
 	if err != nil {
 		log.Fatal(err)
@@ -56,12 +70,6 @@ func main() {
 	databaseURL := appConfig.DatabaseURL
 	if databaseURL == "" {
 		log.Fatal("DATABASE_URL is not set")
-	}
-	if len(os.Args) > 1 && os.Args[1] == "migrate" {
-		if err := runMigrations(databaseURL); err != nil {
-			log.Fatalf("migration failed: %v", err)
-		}
-		return
 	}
 
 	secret := appConfig.APIGatewaySecret

@@ -1,0 +1,10 @@
+{
+  "date": "2026-10-06",
+  "title": "Do not require runtime payment OTP for migrations",
+  "decisions": [
+    "The migrate command reads only DATABASE_URL and runs before config.Load, because PAYMENT_OTP is consumed only when composing the runtime payment service.",
+    "Normal server startup continues to call config.Load and therefore continues to reject a missing or blank PAYMENT_OTP with ErrMissingPaymentOTP.",
+    "Do not add a dummy or CI PAYMENT_OTP to the workflow; command-level separation avoids weakening the runtime secret contract and avoids coupling schema maintenance to payment configuration."
+  ],
+  "compatibility": "No API, persistence, serialization, or model fields change. The migration command becomes usable with its existing DATABASE_URL-only contract; server startup behavior remains unchanged."
+}
