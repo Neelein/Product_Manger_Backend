@@ -100,6 +100,7 @@ jobs:
         env:
           E2E_DATABASE_URL: postgres://root:root123@localhost:5432/productdb_e2e?sslmode=disable
           E2E_BACKEND_DIR: ${{ github.workspace }}
+          PAYMENT_OTP: e2e-payment-otp-placeholder
         run: npx playwright test
 
       - name: Upload artifacts on failure
