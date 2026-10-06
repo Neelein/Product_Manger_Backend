@@ -23,4 +23,7 @@ func TestAdministrativeRoutesUseEmployeeBoundary(t *testing.T) {
 			t.Errorf("%s is not protected by employee authorization", route)
 		}
 	}
+	if !strings.Contains(s, `employeeAuth(http.HandlerFunc(h.ListDepartmentEmployees))`) {
+		t.Error("department employee directory is not protected by employee authorization")
+	}
 }

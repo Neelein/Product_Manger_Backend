@@ -1,0 +1,12 @@
+{
+  "topic": "department-employee-directory-tests",
+  "scope": "Backend-only direct handler and service regression coverage",
+  "steps": [
+    "Extend existing fake repository/service tests without changing production behavior or requiring DATABASE_URL.",
+    "Cover employee authorization, missing departments, department scoping, ungrouped exclusion, search, pagination, sorting, and response field redaction.",
+    "Run gofmt and go test ./...; report unavailable database-backed or E2E checks separately."
+  ],
+  "assumptions": [
+    "The existing endpoint contract is authoritative: invalid sort values are handled by the repository allow-list fallback, while invalid page/limit values are rejected."
+  ]
+}

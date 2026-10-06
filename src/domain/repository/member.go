@@ -17,6 +17,19 @@ type Member interface {
 type MemberPermission interface {
 	UpdatePermission(context.Context, string, string) error
 }
+
+type MemberDirectory interface {
+	ListEmployees(context.Context, string, int, int) ([]model.Member, int, error)
+	ListEmployeesByDepartment(context.Context, int, string, int, int, string, string) ([]model.EmployeeDirectoryEntry, int, error)
+	UpdateDepartment(context.Context, string, int) error
+}
+
+type Department interface {
+	List(context.Context) ([]model.Department, error)
+	Create(context.Context, string) (*model.Department, error)
+	Update(context.Context, int, string) (*model.Department, error)
+	Delete(context.Context, int) error
+}
 type Session interface {
 	Create(context.Context, *model.Session) error
 	GetByKey(context.Context, string) (*model.Session, error)

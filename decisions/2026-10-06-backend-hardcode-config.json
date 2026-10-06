@@ -1,0 +1,11 @@
+{
+  "date": "2026-10-06",
+  "title": "Move backend hardcoded settings to configuration",
+  "decisions": [
+    "PAYMENT_OTP is mandatory at startup; a missing or blank value causes startup validation to fail before database connection, and no production fallback OTP is retained.",
+    "DEFAULT_DEPARTMENT_CODE defaults to 1 for local compatibility and can drive the employee browsing alias /api/departments/employees; the existing explicit /{departmentCode}/employees API remains unchanged.",
+    "PORT defaults to 8090 to preserve the current backend behavior; PAYMENT_OTP, DEFAULT_DEPARTMENT_CODE, and PORT are documented in dotenv.env and dotenv.example.",
+    "Pagination defaults/maxima are shared typed-rule constants. Existing model fields were reviewed and none were removed: affected fields remain part of JSON or persistence/API contracts."
+  ],
+  "compatibility": "Existing payment, department, authorization, and explicit pagination API behavior is preserved except that payment OTP is now supplied by environment configuration."
+}

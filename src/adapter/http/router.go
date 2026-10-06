@@ -73,6 +73,21 @@ func RegisterMemberRoutes(r *mux.Router, memberService usecase.MemberService, se
 	r.Handle("/api/members/{memberId}/permission", auth(http.HandlerFunc(h.UpdateMemberPermission))).Methods("POST")
 }
 
+func RegisterDepartmentRoutes(r *mux.Router, departmentService usecase.DepartmentService, memberService usecase.MemberService, sessionService usecase.SessionService, defaultDepartmentCode ...int) {
+	h := NewDepartmentHandler(departmentService, defaultDepartmentCode...)
+	auth := AuthMiddleware(sessionService, memberService)
+	admin := RequireRole("admin", auth)
+	employeeAuth := RequireEmployee(auth)
+	r.Handle("/api/members", admin(http.HandlerFunc(h.ListEmployees))).Methods("GET")
+	r.Handle("/api/departments/employees", employeeAuth(http.HandlerFunc(h.ListDepartmentEmployees))).Methods("GET")
+	r.Handle("/api/departments/{departmentCode}/employees", employeeAuth(http.HandlerFunc(h.ListDepartmentEmployees))).Methods("GET")
+	r.Handle("/api/departments", admin(http.HandlerFunc(h.List))).Methods("GET")
+	r.Handle("/api/departments", admin(http.HandlerFunc(h.Create))).Methods("POST")
+	r.Handle("/api/departments/{code}", admin(http.HandlerFunc(h.Update))).Methods("PATCH")
+	r.Handle("/api/departments/{code}", admin(http.HandlerFunc(h.Delete))).Methods("DELETE")
+	r.Handle("/api/members/{memberId}/department", admin(http.HandlerFunc(h.UpdateMemberDepartment))).Methods("PUT")
+}
+
 func RegisterRegistrationCodeRoutes(r *mux.Router, codeService usecase.RegistrationCodeService, memberService usecase.MemberService, sessionService usecase.SessionService) {
 	h := NewRegistrationCodeHandler(codeService)
 	auth := AuthMiddleware(sessionService, memberService)

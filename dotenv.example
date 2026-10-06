@@ -1,0 +1,10 @@
+POSTGRES_USER=root
+POSTGRES_PASSWORD=change-me
+POSTGRES_DB=productdb
+DATABASE_URL=postgres://root:change-me@localhost:5432/productdb?sslmode=disable
+MEDIA_ROOT=./media
+API_DOMAIN=http://localhost:8090
+PORT=8090
+DEFAULT_DEPARTMENT_CODE=1
+PAYMENT_OTP=replace-with-local-test-value
+# API_GATEWAY_SECRET=

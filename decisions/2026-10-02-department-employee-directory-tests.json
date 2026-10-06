@@ -1,0 +1,9 @@
+{
+  "title": "Strengthen department employee directory backend tests",
+  "decisions": [
+    "Add direct usecase and HTTP handler coverage using in-memory fakes; do not add DATABASE_URL-dependent tests or modify frontend code.",
+    "Assert the existing authorization, department existence, scoped query, search, pagination, sort allow-list/fallback, phone response, and sensitive-field redaction contracts.",
+    "No production-code adjustment is planned because the handler and service already expose injectable interfaces and the requested behaviors are directly testable."
+  ],
+  "breaking_change": "None; test-only changes plus documentation records."
+}

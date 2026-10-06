@@ -30,6 +30,8 @@ type Order = model.Order
 type OrderItem = model.OrderItem
 type OrderStatusHistory = model.OrderStatusHistory
 type Payment = model.Payment
+type Department = model.Department
+type EmployeeDirectoryEntry = model.EmployeeDirectoryEntry
 
 type ErrorResponse struct {
 	Error string `json:"error"`
@@ -60,11 +62,12 @@ type ChangePasswordRequest struct {
 	ConfirmNewPassword string `json:"confirm_new_password"`
 }
 type MemberResponse struct {
-	ID         string `json:"id"`
-	Email      string `json:"email"`
-	Name       string `json:"name"`
-	MemberType string `json:"member_type"`
-	Permission string `json:"permission"`
+	ID             string `json:"id"`
+	Email          string `json:"email"`
+	Name           string `json:"name"`
+	MemberType     string `json:"member_type"`
+	Permission     string `json:"permission"`
+	DepartmentCode int    `json:"department_code"`
 }
 type CreateRegistrationCodeRequest struct {
 	Code string `json:"code"`
@@ -78,6 +81,21 @@ type RegistrationCodeListResponse struct {
 type MembersListResponse struct {
 	Members []MemberResponse `json:"members"`
 	Total   int              `json:"total"`
+}
+type EmployeeDirectoryResponse struct {
+	Employees []EmployeeDirectoryEntry `json:"employees"`
+	Total     int                      `json:"total"`
+	Page      int                      `json:"page"`
+	Limit     int                      `json:"limit"`
+}
+type DepartmentRequest struct {
+	Name string `json:"name"`
+}
+type DepartmentAssignmentRequest struct {
+	DepartmentCode int `json:"department_code"`
+}
+type DepartmentListResponse struct {
+	Departments []Department `json:"departments"`
 }
 type CreateProductRequest struct {
 	Name       string  `json:"name"`

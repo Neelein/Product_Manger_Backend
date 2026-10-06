@@ -48,8 +48,8 @@ func TestPaymentHandlerReturnsPaymentWithoutCardSecrets(t *testing.T) {
 
 func TestPaymentHandlerAcceptsUppercaseMethodAndPersistsNormalizedValue(t *testing.T) {
 	repo := &paymentRepositoryStub{}
-	h := NewPaymentHandler(usecase.NewPaymentService(repo))
-	body, _ := json.Marshal(CreatePaymentRequest{Method: "CREDIT_CARD", CardNumber: "4242424242424242", CVV: "123", OTP: "1234567"})
+	h := NewPaymentHandler(usecase.NewPaymentService(repo, "handler-test-otp"))
+	body, _ := json.Marshal(CreatePaymentRequest{Method: "CREDIT_CARD", CardNumber: "4242424242424242", CVV: "123", OTP: "handler-test-otp"})
 	req := httptest.NewRequest("POST", "/api/orders/order-1/payments", bytes.NewReader(body))
 	req = req.WithContext(ContextWithMember(req.Context(), &Member{ID: "member-1"}))
 	req = mux.SetURLVars(req, map[string]string{"orderId": "order-1"})

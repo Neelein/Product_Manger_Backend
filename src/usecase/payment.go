@@ -26,8 +26,17 @@ type PaymentService interface {
 
 type paymentService struct{ repository repository.Payment }
 
-func NewPaymentService(repo repository.Payment) PaymentService {
-	return &paymentService{repository: repo}
+type configuredPaymentService struct {
+	repository repository.Payment
+	otp        string
+}
+
+func NewPaymentService(repo repository.Payment, configuredOTP ...string) PaymentService {
+	otp := ""
+	if len(configuredOTP) > 0 {
+		otp = configuredOTP[0]
+	}
+	return &configuredPaymentService{repository: repo, otp: otp}
 }
 
 func validDigits(value string, min, max int) bool {
@@ -58,7 +67,7 @@ func validLuhn(value string) bool {
 	return sum%10 == 0
 }
 
-func validatePayment(input PaymentInput) (string, string, error) {
+func validatePayment(input PaymentInput, expectedOTP string) (string, string, error) {
 	method := strings.ToLower(strings.TrimSpace(input.Method))
 	if method != "credit_card" {
 		return "", "", model.ErrInvalidPayment
@@ -69,7 +78,7 @@ func validatePayment(input PaymentInput) (string, string, error) {
 	if !validDigits(input.CVV, 3, 4) {
 		return "", "", model.ErrInvalidPayment
 	}
-	if input.OTP != "1234567" {
+	if expectedOTP == "" || input.OTP != expectedOTP {
 		return "", "", model.ErrInvalidOTP
 	}
 	return method, input.CardNumber[len(input.CardNumber)-4:], nil
@@ -77,18 +86,18 @@ func validatePayment(input PaymentInput) (string, string, error) {
 
 func maskCard(last4 string) string { return "**** **** **** " + last4 }
 
-func (s *paymentService) Pay(ctx context.Context, member *model.Member, orderID string, input PaymentInput) (*model.Payment, error) {
+func (s *configuredPaymentService) Pay(ctx context.Context, member *model.Member, orderID string, input PaymentInput) (*model.Payment, error) {
 	if member == nil {
 		return nil, model.ErrForbidden
 	}
-	method, last4, err := validatePayment(input)
+	method, last4, err := validatePayment(input, s.otp)
 	if err != nil {
 		return nil, err
 	}
 	return s.repository.Pay(ctx, orderID, member.ID, method, last4, maskCard(last4), time.Now().UTC())
 }
 
-func (s *paymentService) Expire(ctx context.Context, now time.Time) (int, error) {
+func (s *configuredPaymentService) Expire(ctx context.Context, now time.Time) (int, error) {
 	return s.repository.ExpirePending(ctx, now.Add(-PaymentExpiration), now)
 }
 

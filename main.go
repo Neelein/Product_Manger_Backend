@@ -15,6 +15,7 @@ import (
 	"backend/src/adapter/postgres"
 	"backend/src/adapter/session"
 	"backend/src/adapter/storage"
+	"backend/src/config"
 	"backend/src/infrastructure"
 	"backend/src/usecase"
 
@@ -47,19 +48,31 @@ func runMigrations(databaseURL string) error {
 	return nil
 }
 
-func main() {
-	databaseURL := os.Getenv("DATABASE_URL")
+func runMigrationCommand(getenv func(string) string, migrate func(string) error) error {
+	databaseURL := strings.TrimSpace(getenv("DATABASE_URL"))
 	if databaseURL == "" {
-		log.Fatal("DATABASE_URL is not set")
+		return fmt.Errorf("DATABASE_URL is not set")
 	}
+	return migrate(databaseURL)
+}
+
+func main() {
 	if len(os.Args) > 1 && os.Args[1] == "migrate" {
-		if err := runMigrations(databaseURL); err != nil {
+		if err := runMigrationCommand(os.Getenv, runMigrations); err != nil {
 			log.Fatalf("migration failed: %v", err)
 		}
 		return
 	}
+	appConfig, err := config.Load(os.Getenv)
+	if err != nil {
+		log.Fatal(err)
+	}
+	databaseURL := appConfig.DatabaseURL
+	if databaseURL == "" {
+		log.Fatal("DATABASE_URL is not set")
+	}
 
-	secret := os.Getenv("API_GATEWAY_SECRET")
+	secret := appConfig.APIGatewaySecret
 
 	pool, err := infrastructure.NewPool(context.Background(), databaseURL)
 	if err != nil {
@@ -84,11 +97,12 @@ func main() {
 	sessionService := usecase.NewSessionService(sessionRepo)
 	codeService := usecase.NewRegistrationCodeService(codeRepo)
 	categoryService := usecase.NewCategoryService(categoryRepo)
+	departmentService := usecase.NewDepartmentService(memberRepo, memberRepo, postgres.NewDepartmentRepository(pool))
 	announcementService := usecase.NewAnnouncementService(postgres.NewAnnouncementRepository(pool), fileStorage)
 	chatService := usecase.NewChatService(postgres.NewChatRoomRepository(pool), fileStorage)
 	eventService := usecase.NewEventService(postgres.NewEventRepository(pool))
 	orderService := usecase.NewOrderService(postgres.NewOrderRepository(pool))
-	paymentService := usecase.NewPaymentService(postgres.NewPaymentRepository(pool))
+	paymentService := usecase.NewPaymentService(postgres.NewPaymentRepository(pool), appConfig.PaymentOTP)
 	paymentWorker := usecase.NewPaymentWorker(paymentService, time.Now)
 	workerContext, stopWorker := context.WithCancel(context.Background())
 	defer stopWorker()
@@ -103,6 +117,7 @@ func main() {
 	apphttp.RegisterProductRoutes(r, productService, memberService, sessionService)
 	apphttp.RegisterInventoryRoutes(r, inventoryService, memberService, sessionService)
 	apphttp.RegisterMemberRoutes(r, memberService, sessionService, codeService)
+	apphttp.RegisterDepartmentRoutes(r, departmentService, memberService, sessionService, appConfig.DefaultDepartmentCode)
 	apphttp.RegisterRegistrationCodeRoutes(r, codeService, memberService, sessionService)
 	apphttp.RegisterCategoryRoutes(r, categoryService, memberService, sessionService)
 	apphttp.RegisterAnnouncementRoutes(r, announcementService, memberService, sessionService)
@@ -116,8 +131,8 @@ func main() {
 		log.Println("API_GATEWAY_SECRET is not set — /api routes are open")
 	}
 
-	log.Println("Server starting on :8090")
-	log.Fatal(http.ListenAndServe(":8090", handler))
+	log.Printf("Server starting on :%s", appConfig.Port)
+	log.Fatal(http.ListenAndServe(":"+appConfig.Port, handler))
 }
 
 func homeHandler(w http.ResponseWriter, r *http.Request) {
