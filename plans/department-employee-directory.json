@@ -1,0 +1,10 @@
+{
+  "topic": "department-employee-directory",
+  "scope": "Backend-only read-only employee directory API",
+  "steps": [
+    "Add GET /api/departments/{departmentCode}/employees behind authenticated employee authorization.",
+    "Scope persistence queries by department code, exclude ungrouped employees, and support search, pagination, and allow-listed sorting.",
+    "Expose employee id, name, email, department, and phone; add the missing phone persistence column with an empty default for existing rows.",
+    "Cover service, handler, and schema behavior with focused tests."
+  ]
+}

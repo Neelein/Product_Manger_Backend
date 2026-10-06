@@ -1,0 +1,10 @@
+{
+  "date": "2026-10-06",
+  "title": "Inject the configured OTP into the payment integration fixture",
+  "decisions": [
+    "Keep the OTP exclusively in the integration-test fixture as a test constant; production code retains no fallback OTP.",
+    "Construct the fixture payment service with the same explicit OTP injection contract used by production composition.",
+    "Replace the stale hardcoded request OTP in the payment integration test with the fixture constant so the expected forbidden, validation, creation, and duplicate-payment behavior remains covered."
+  ],
+  "compatibility": "No production API or payment behavior changes. This fixes the integration fixture so a valid payment request reaches the existing ownership and payment state assertions instead of failing OTP validation with HTTP 400."
+}

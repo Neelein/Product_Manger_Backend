@@ -1,0 +1,9 @@
+{
+  "topic": "payment-integration-otp-fixture",
+  "scope": "Backend integration-test fixture configuration",
+  "steps": [
+    "Define a test-only payment OTP constant in the payment integration fixture.",
+    "Inject that OTP into the payment service used by the fixture and use it in payment requests.",
+    "Run formatting and backend tests, then attempt the targeted integration test when DATABASE_URL is available."
+  ]
+}

@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"backend/src/domain/model"
 	"errors"
 	"strings"
 
@@ -32,7 +33,7 @@ func PageLimit(page, limit int) error {
 	if page < 1 {
 		return ErrInvalidPage
 	}
-	if limit < 1 || limit > 100 {
+	if limit < 1 || limit > model.MaxPageSize {
 		return ErrInvalidLimit
 	}
 	return nil

@@ -572,15 +572,15 @@ func (s *chatService) ListRoomsByMemberByMonth(ctx context.Context, memberID str
 }
 func (s *chatService) ListAvailableMembers(ctx context.Context, roomID string, page, limit int) ([]model.Member, int, error) {
 	if page == 0 {
-		page = 1
+		page = model.DefaultPage
 	}
 	if limit == 0 {
-		limit = 20
+		limit = model.DefaultPageSize
 	}
 	if page < 1 {
 		return nil, 0, ErrInvalidChatPage
 	}
-	if limit < 1 || limit > 100 {
+	if limit < 1 || limit > model.MaxPageSize {
 		return nil, 0, ErrInvalidChatLimit
 	}
 	offset := (page - 1) * limit
@@ -654,13 +654,13 @@ func (s *orderService) List(ctx context.Context, member *model.Member, status st
 		return nil, 0, model.ErrForbidden
 	}
 	if page < 1 {
-		page = 1
+		page = model.DefaultPage
 	}
 	if size < 1 {
-		size = 20
+		size = model.DefaultPageSize
 	}
-	if size > 100 {
-		size = 100
+	if size > model.MaxPageSize {
+		size = model.MaxPageSize
 	}
 	return s.Order.List(ctx, member.ID, status, page, size, member.MemberType == "employee")
 }

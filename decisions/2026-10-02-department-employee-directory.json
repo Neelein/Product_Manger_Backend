@@ -1,0 +1,10 @@
+{
+  "title": "Add department-scoped employee directory API",
+  "decisions": [
+    "All authenticated employees may read only the requested department; administrator authorization remains for department management routes.",
+    "The endpoint is GET /api/departments/{departmentCode}/employees with search, page, limit, sort_by, and sort_order query parameters.",
+    "The existing schema had no members.phone column. Migration 026 adds a non-null VARCHAR(50) column with an empty default; existing phone values therefore remain empty until a separate write flow is provided.",
+    "The response uses a dedicated read-only employee directory entry so password, permission, timestamps, and unrelated member fields cannot leak."
+  ],
+  "breaking_change": "No existing route is removed. The new phone column is additive; existing employee records receive an empty phone value."
+}

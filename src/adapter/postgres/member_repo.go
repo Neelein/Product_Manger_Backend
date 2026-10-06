@@ -39,7 +39,7 @@ func (r *MemberRepositoryPGX) Create(ctx context.Context, member *domain.Member)
 func (r *MemberRepositoryPGX) GetByEmail(ctx context.Context, email string) (*domain.Member, error) {
 	var m domain.Member
 	var permission *string
-	err := r.pool.QueryRow(ctx, "SELECT * FROM get_member_by_email($1)", email).Scan(&m.ID, &m.Email, &m.Password, &m.Name, &m.MemberType, &permission, &m.CreatedAt, &m.UpdatedAt)
+	err := r.pool.QueryRow(ctx, "SELECT id, email, password, name, phone, member_type, permission, department_code, created_at, updated_at FROM members WHERE email = $1", email).Scan(&m.ID, &m.Email, &m.Password, &m.Name, &m.Phone, &m.MemberType, &permission, &m.DepartmentCode, &m.CreatedAt, &m.UpdatedAt)
 	if permission != nil {
 		m.Permission = *permission
 	}
@@ -55,7 +55,7 @@ func (r *MemberRepositoryPGX) GetByEmail(ctx context.Context, email string) (*do
 func (r *MemberRepositoryPGX) GetByID(ctx context.Context, id string) (*domain.Member, error) {
 	var m domain.Member
 	var permission *string
-	err := r.pool.QueryRow(ctx, "SELECT * FROM get_member_by_id($1)", id).Scan(&m.ID, &m.Email, &m.Password, &m.Name, &m.MemberType, &permission, &m.CreatedAt, &m.UpdatedAt)
+	err := r.pool.QueryRow(ctx, "SELECT id, email, password, name, phone, member_type, permission, department_code, created_at, updated_at FROM members WHERE id = $1", id).Scan(&m.ID, &m.Email, &m.Password, &m.Name, &m.Phone, &m.MemberType, &permission, &m.DepartmentCode, &m.CreatedAt, &m.UpdatedAt)
 	if permission != nil {
 		m.Permission = *permission
 	}

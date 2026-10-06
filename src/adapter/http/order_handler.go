@@ -67,13 +67,13 @@ func (h *OrderHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if page < 1 {
-		page = 1
+		page = model.DefaultPage
 	}
 	if size < 1 {
-		size = 20
+		size = model.DefaultPageSize
 	}
-	if size > 100 {
-		size = 100
+	if size > model.MaxPageSize {
+		size = model.MaxPageSize
 	}
 	responseOrders := make([]OrderResponseDTO, len(orders))
 	for i, order := range orders {

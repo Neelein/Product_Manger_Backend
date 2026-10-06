@@ -9,6 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const testPaymentOTP = "test-payment-otp"
+
 type paymentRepoStub struct {
 	paid    int
 	expired int
@@ -24,9 +26,9 @@ func (r *paymentRepoStub) Pay(_ context.Context, orderID, memberID, method, last
 
 func TestPaymentServiceNormalizesMethodBeforeRepository(t *testing.T) {
 	repo := &paymentRepoStub{}
-	service := NewPaymentService(repo)
+	service := NewPaymentService(repo, testPaymentOTP)
 
-	_, err := service.Pay(context.Background(), &model.Member{ID: "member-1"}, "order-1", PaymentInput{Method: "  CREDIT_CARD ", CardNumber: "4242424242424242", CVV: "123", OTP: "1234567"})
+	_, err := service.Pay(context.Background(), &model.Member{ID: "member-1"}, "order-1", PaymentInput{Method: "  CREDIT_CARD ", CardNumber: "4242424242424242", CVV: "123", OTP: testPaymentOTP})
 
 	require.NoError(t, err)
 	require.Equal(t, "credit_card", repo.method)
@@ -40,8 +42,8 @@ func (r *paymentRepoStub) ExpirePending(_ context.Context, cutoff, now time.Time
 
 func TestPaymentServiceValidatesFakeCardAndStoresOnlyLast4(t *testing.T) {
 	repo := &paymentRepoStub{}
-	service := NewPaymentService(repo)
-	payment, err := service.Pay(context.Background(), &model.Member{ID: "member-1"}, "order-1", PaymentInput{Method: "credit_card", CardNumber: "4242424242424242", CVV: "123", OTP: "1234567"})
+	service := NewPaymentService(repo, testPaymentOTP)
+	payment, err := service.Pay(context.Background(), &model.Member{ID: "member-1"}, "order-1", PaymentInput{Method: "credit_card", CardNumber: "4242424242424242", CVV: "123", OTP: testPaymentOTP})
 	require.NoError(t, err)
 	require.Equal(t, 1, repo.paid)
 	require.Equal(t, "4242", payment.Last4)
@@ -49,8 +51,8 @@ func TestPaymentServiceValidatesFakeCardAndStoresOnlyLast4(t *testing.T) {
 }
 
 func TestPaymentServiceRejectsInvalidCardAndOTP(t *testing.T) {
-	service := NewPaymentService(&paymentRepoStub{})
-	base := PaymentInput{Method: "credit_card", CardNumber: "4242424242424242", CVV: "123", OTP: "1234567"}
+	service := NewPaymentService(&paymentRepoStub{}, testPaymentOTP)
+	base := PaymentInput{Method: "credit_card", CardNumber: "4242424242424242", CVV: "123", OTP: testPaymentOTP}
 	_, err := service.Pay(context.Background(), &model.Member{ID: "m"}, "o", PaymentInput{Method: base.Method, CardNumber: "4242424242424243", CVV: base.CVV, OTP: base.OTP})
 	require.ErrorIs(t, err, model.ErrInvalidCardNumber)
 	base.OTP = "0000000"
@@ -60,7 +62,7 @@ func TestPaymentServiceRejectsInvalidCardAndOTP(t *testing.T) {
 
 func TestPaymentWorkerRunOnceUsesInjectedClock(t *testing.T) {
 	repo := &paymentRepoStub{}
-	service := NewPaymentService(repo)
+	service := NewPaymentService(repo, testPaymentOTP)
 	now := time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)
 	worker := NewPaymentWorker(service, func() time.Time { return now })
 	count, err := worker.RunOnce(context.Background())

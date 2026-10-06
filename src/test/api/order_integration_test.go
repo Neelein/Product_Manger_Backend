@@ -32,6 +32,8 @@ type orderAPIFixture struct {
 	sessions               *session.SessionCache
 }
 
+const integrationPaymentOTP = "integration-test-payment-otp"
+
 func newOrderAPIFixture(t *testing.T, firstStock, secondStock int) *orderAPIFixture {
 	t.Helper()
 	ctx := context.Background()
@@ -89,7 +91,7 @@ func newOrderAPIFixture(t *testing.T, firstStock, secondStock int) *orderAPIFixt
 	router := mux.NewRouter()
 	memberService := usecase.NewMemberService(memberRepo, sessions)
 	api.RegisterOrderRoutes(router, usecase.NewOrderService(orderRepo), memberService, usecase.NewSessionService(sessions))
-	api.RegisterPaymentRoutes(router, usecase.NewPaymentService(paymentRepo), memberService, usecase.NewSessionService(sessions))
+	api.RegisterPaymentRoutes(router, usecase.NewPaymentService(paymentRepo, integrationPaymentOTP), memberService, usecase.NewSessionService(sessions))
 
 	f := &orderAPIFixture{router: router, customer: customer, other: other, staff: staff, customerSession: newSession(customer.ID), otherSession: newSession(other.ID), staffSession: newSession(staff.ID), priceID: price.ID, secondPriceID: secondPrice.ID, productID: product.ID, sessions: sessions}
 	t.Cleanup(func() {
@@ -104,9 +106,9 @@ func TestPaymentAPIValidatesOwnershipDuplicatePaymentAndConfirmation(t *testing.
 	created := f.request(t, f.customerSession, http.MethodPost, "/api/orders", orderBody(f.priceID, 1))
 	require.Equal(t, http.StatusCreated, created.Code)
 	order := decodeOrder(t, created)
-	paymentBody := map[string]string{"method": "CREDIT_CARD", "card_number": "4242424242424242", "cvv": "123", "otp": "1234567"}
+	paymentBody := map[string]string{"method": "CREDIT_CARD", "card_number": "4242424242424242", "cvv": "123", "otp": integrationPaymentOTP}
 	require.Equal(t, http.StatusForbidden, f.request(t, f.otherSession, http.MethodPost, "/api/orders/"+order.ID+"/payments", paymentBody).Code)
-	require.Equal(t, http.StatusBadRequest, f.request(t, f.customerSession, http.MethodPost, "/api/orders/"+order.ID+"/payments", map[string]string{"method": "credit_card", "card_number": "4242424242424243", "cvv": "123", "otp": "1234567"}).Code)
+	require.Equal(t, http.StatusBadRequest, f.request(t, f.customerSession, http.MethodPost, "/api/orders/"+order.ID+"/payments", map[string]string{"method": "credit_card", "card_number": "4242424242424243", "cvv": "123", "otp": integrationPaymentOTP}).Code)
 	require.Equal(t, http.StatusCreated, f.request(t, f.customerSession, http.MethodPost, "/api/orders/"+order.ID+"/payments", paymentBody).Code)
 	require.Equal(t, http.StatusConflict, f.request(t, f.customerSession, http.MethodPost, "/api/orders/"+order.ID+"/payments", paymentBody).Code)
 	var status, paymentStatus string

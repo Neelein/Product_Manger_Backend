@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"backend/src/domain/model"
 	"backend/src/usecase"
 )
 
@@ -63,7 +64,7 @@ func RequireRole(role string, auth func(http.Handler) http.Handler) func(http.Ha
 				writeError(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
-			if member.MemberType != "employee" || member.Permission != role {
+			if member.MemberType != string(model.MemberTypeEmployee) || member.Permission != role {
 				writeError(w, http.StatusForbidden, "forbidden")
 				return
 			}
@@ -80,7 +81,7 @@ func RequireEmployee(auth func(http.Handler) http.Handler) func(http.Handler) ht
 				writeError(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
-			if member.MemberType != "employee" {
+			if member.MemberType != string(model.MemberTypeEmployee) {
 				writeError(w, http.StatusForbidden, "forbidden")
 				return
 			}

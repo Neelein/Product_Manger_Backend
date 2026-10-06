@@ -64,7 +64,7 @@ func (h *MemberHandler) RegisterMember(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusCreated, MemberResponse{
 		ID: member.ID, Email: member.Email, Name: member.Name,
-		MemberType: member.MemberType, Permission: member.Permission,
+		MemberType: member.MemberType, Permission: member.Permission, DepartmentCode: member.DepartmentCode,
 	})
 }
 
@@ -118,7 +118,7 @@ func (h *MemberHandler) LoginMember(w http.ResponseWriter, r *http.Request) {
 			ID:         member.ID,
 			Email:      member.Email,
 			Name:       member.Name,
-			MemberType: member.MemberType, Permission: member.Permission,
+			MemberType: member.MemberType, Permission: member.Permission, DepartmentCode: member.DepartmentCode,
 		},
 	})
 }
@@ -174,7 +174,7 @@ func (h *MemberHandler) UpdateMember(w http.ResponseWriter, r *http.Request) {
 		ID:         member.ID,
 		Email:      member.Email,
 		Name:       member.Name,
-		MemberType: member.MemberType, Permission: member.Permission,
+		MemberType: member.MemberType, Permission: member.Permission, DepartmentCode: member.DepartmentCode,
 	})
 }
 
@@ -221,6 +221,6 @@ func (h *MemberHandler) GetCurrentMember(w http.ResponseWriter, r *http.Request)
 		ID:         member.ID,
 		Email:      member.Email,
 		Name:       member.Name,
-		MemberType: member.MemberType, Permission: member.Permission,
+		MemberType: member.MemberType, Permission: member.Permission, DepartmentCode: member.DepartmentCode,
 	})
 }

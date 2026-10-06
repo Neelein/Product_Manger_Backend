@@ -1,0 +1,10 @@
+{
+  "topic": "backend-hardcode-config",
+  "scope": "Backend-only configuration injection and business-rule constants",
+  "steps": [
+    "Add a typed environment configuration loader with required PAYMENT_OTP, DEFAULT_DEPARTMENT_CODE, and PORT contracts.",
+    "Inject payment OTP and the configured department browsing default into server composition while preserving existing explicit department routes.",
+    "Centralize shared pagination and status/member rule constants and cover configuration, payment, department, authorization, and pagination regressions.",
+    "Review affected model fields and document compatibility, tests, and integration-test requirements."
+  ]
+}

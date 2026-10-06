@@ -411,9 +411,10 @@ func (h *ChatRoomHandler) ListAvailableMembers(w http.ResponseWriter, r *http.Re
 	memberResponses := make([]MemberResponse, len(members))
 	for i, m := range members {
 		memberResponses[i] = MemberResponse{
-			ID:    m.ID,
-			Email: m.Email,
-			Name:  m.Name,
+			ID:             m.ID,
+			Email:          m.Email,
+			Name:           m.Name,
+			DepartmentCode: m.DepartmentCode,
 		}
 	}
 
