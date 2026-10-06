@@ -117,6 +117,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: e2e
     if: github.ref == 'refs/heads/main'
+    environment: production
     steps:
       - uses: actions/checkout@v4
 
@@ -145,10 +146,13 @@ jobs:
 
       - name: Deploy to server
         uses: appleboy/ssh-action@v1
+        env:
+          PAYMENT_OTP: ${{ secrets.PAYMENT_OTP }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key_path: /home/runner/.ssh/deploy_key
+          envs: PAYMENT_OTP
           script: |
             docker pull ghcr.io/neelein/product_manager_backend:latest
             docker exec my_postgres_db psql -U root -c "CREATE DATABASE productdb;" 2>/dev/null || true
@@ -164,4 +168,5 @@ jobs:
               -e API_DOMAIN=https://你的網域.com \
               -e API_GATEWAY_SECRET="${{ secrets.API_GATEWAY_SECRET }}" \
               -e DATABASE_URL="postgres://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@my_postgres_db:5432/productdb?sslmode=disable" \
+              -e PAYMENT_OTP="$PAYMENT_OTP" \
               ghcr.io/neelein/product_manager_backend:latest
